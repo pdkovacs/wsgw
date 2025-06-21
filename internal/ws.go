@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"wsproxy/internal/logging"
+	"wsgw/internal/logging"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
@@ -67,19 +67,19 @@ type wsIO interface {
 
 type onMgsReceivedFunc func(c context.Context, msg string) error
 
-func (wsconn *wsConnections) processMessages(
+func (wsconns *wsConnections) processMessages(
 	ctx context.Context,
 	connId ConnectionID,
 	wsIo wsIO,
 	onMessageFromClient onMgsReceivedFunc,
 ) error {
 	logger := zerolog.Ctx(ctx).With().Str("method", "processMessages").Str(ConnectionIDKey, string(connId)).Logger()
-	conn := newConnection(connId, wsIo, wsconn.connectionMessageBuffer)
+	conn := newConnection(connId, wsIo, wsconns.connectionMessageBuffer)
 
-	wsconn.addConnection(conn)
+	wsconns.addConnection(conn)
 	logger.Debug().Msg("connection added")
 	defer func() {
-		wsconn.deleteConnection(conn)
+		wsconns.deleteConnection(conn)
 		logger.Debug().Msg("connection removed")
 	}()
 
@@ -87,14 +87,13 @@ func (wsconn *wsConnections) processMessages(
 		for {
 			msgRead, errRead := wsIo.Read(ctx)
 			if errRead != nil {
-				logger.Debug().Msgf("Read error: %v", errRead)
 				var closeError websocket.CloseError
 				if errors.As(errRead, &closeError) {
-					logger.Debug().Err(errRead).Msg("WS connection closing...")
+					logger.Debug().Interface("closeError", closeError).Msg("WS connection closing...")
 					conn.connClosed <- closeError
 					return
 				}
-				logger.Error().Err(errRead).Msg("WS connection not closing")
+				logger.Error().Err(errRead).Msg("read-error, not closing")
 				select {
 				case conn.fromClient <- "asdfasdf":
 				default:
@@ -123,8 +122,12 @@ func (wsconn *wsConnections) processMessages(
 				conn.fromApp <- sendToAppErr.Error()
 			}
 		case closeError := <-conn.connClosed:
-			logger.Debug().Err(closeError).Msg("select: ws connection closing...")
 			if closeError.Code == websocket.StatusNormalClosure {
+				logger.Debug().Msg("select: StatusNormalClosure")
+				return nil
+			}
+			if closeError.Code == websocket.StatusGoingAway {
+				logger.Debug().Msg("select: socket closed with StatusGoingAway")
 				return nil
 			}
 			logger.Error().Err(closeError).Msg("select: socket closed abnormaly")
@@ -138,23 +141,23 @@ func (wsconn *wsConnections) processMessages(
 }
 
 // addConnection registers a subscriber.
-func (wsconn *wsConnections) addConnection(conn *connection) {
-	wsconn.wsMapMux.Lock()
-	defer wsconn.wsMapMux.Unlock()
-	wsconn.wsMap[conn.id] = conn
+func (wsconns *wsConnections) addConnection(conn *connection) {
+	wsconns.wsMapMux.Lock()
+	defer wsconns.wsMapMux.Unlock()
+	wsconns.wsMap[conn.id] = conn
 }
 
 // deleteConnection deletes the given subscriber.
-func (wsconn *wsConnections) deleteConnection(conn *connection) {
-	wsconn.wsMapMux.Lock()
-	defer wsconn.wsMapMux.Unlock()
-	defer delete(wsconn.wsMap, conn.id)
+func (wsconns *wsConnections) deleteConnection(conn *connection) {
+	wsconns.wsMapMux.Lock()
+	defer wsconns.wsMapMux.Unlock()
+	defer delete(wsconns.wsMap, conn.id)
 }
 
 // It never blocks and so messages to slow subscribers
 // are dropped.
-func (wsconn *wsConnections) push(ctx context.Context, msg string, connId ConnectionID) error {
-	conn, connNotFoundErr := wsconn.getConnection(connId)
+func (wsconns *wsConnections) push(ctx context.Context, msg string, connId ConnectionID) error {
+	conn, connNotFoundErr := wsconns.getConnection(connId)
 	if connNotFoundErr != nil {
 		return connNotFoundErr
 	}
@@ -165,10 +168,10 @@ func (wsconn *wsConnections) push(ctx context.Context, msg string, connId Connec
 	return nil
 }
 
-func (wsconn *wsConnections) getConnection(connId ConnectionID) (*connection, error) {
-	wsconn.wsMapMux.Lock()
-	defer wsconn.wsMapMux.Unlock()
-	conn, ok := wsconn.wsMap[connId]
+func (wsconns *wsConnections) getConnection(connId ConnectionID) (*connection, error) {
+	wsconns.wsMapMux.Lock()
+	defer wsconns.wsMapMux.Unlock()
+	conn, ok := wsconns.wsMap[connId]
 	if !ok {
 		return nil, errConnectionNotFound
 	}

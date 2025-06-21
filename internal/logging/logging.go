@@ -30,11 +30,12 @@ const (
 func parseLevel() zerolog.Level {
 	logLevel := os.Getenv("LOG_LEVEL")
 	var level zerolog.Level
-	if logLevel == InfoLevel {
+	switch logLevel {
+	case "info":
 		level = zerolog.InfoLevel
-	} else if logLevel == DebugLevel {
+	case "debug":
 		level = zerolog.DebugLevel
-	} else {
+	default:
 		level = zerolog.InfoLevel
 	}
 	fmt.Printf("Log level: %v\n", level)
@@ -105,8 +106,9 @@ func Get() zerolog.Logger {
 }
 
 const (
-	HandlerLogger string = "handler"
-	ServiceLogger string = "service"
-	UnitLogger    string = "unit"
-	MethodLogger  string = "method"
+	HandlerLogger  string = "handler"
+	ServiceLogger  string = "service"
+	UnitLogger     string = "unit"
+	FunctionLogger string = "function"
+	MethodLogger   string = "method"
 )

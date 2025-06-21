@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	wsproxy "wsproxy/internal"
-	"wsproxy/test/mockapp"
+	wsgw "wsgw/internal"
+	"wsgw/test/mockapp"
 
 	"github.com/rs/zerolog"
 	"nhooyr.io/websocket"
@@ -22,7 +22,7 @@ var defaultConnectOptions = &websocket.DialOptions{
 
 type Client struct {
 	wsConn         *websocket.Conn
-	connectionId   wsproxy.ConnectionID
+	connectionId   wsgw.ConnectionID
 	proxyUrl       string
 	msgFromAppChan chan string
 }
@@ -53,17 +53,17 @@ func (c *Client) readAck(ctx context.Context) (map[string]string, error) {
 	return ackMessage, nil
 }
 
-func (c *Client) readConnId(ctx context.Context) (wsproxy.ConnectionID, error) {
+func (c *Client) readConnId(ctx context.Context) (wsgw.ConnectionID, error) {
 	ackMessage, readAckErr := c.readAck(ctx)
 	if readAckErr != nil {
 		return "", readAckErr
 	}
 
-	return wsproxy.ConnectionID(ackMessage[wsproxy.ConnectionIDKey]), nil
+	return wsgw.ConnectionID(ackMessage[wsgw.ConnectionIDKey]), nil
 }
 
 func (c *Client) connect(ctx context.Context, connectOptions ...*websocket.DialOptions) (*http.Response, error) {
-	conn, httpResponse, err := connectToWsproxy(ctx, c.proxyUrl, connectOptions...)
+	conn, httpResponse, err := connectTowsgw(ctx, c.proxyUrl, connectOptions...)
 	if err != nil {
 		return httpResponse, err
 	}
@@ -99,7 +99,7 @@ func (c *Client) connect(ctx context.Context, connectOptions ...*websocket.DialO
 	return httpResponse, nil
 }
 
-func (c *Client) disconnect(ctx context.Context) error {
+func (c *Client) disconnect(_ context.Context) error {
 	return c.wsConn.Close(websocket.StatusNormalClosure, "we're done")
 }
 
@@ -107,10 +107,10 @@ func (c *Client) writeMessage(ctx context.Context, message mockapp.MessageJSON) 
 	return wsjson.Write(ctx, c.wsConn, message)
 }
 
-func connectToWsproxy(ctx context.Context, proxyUrl string, connectOptions ...*websocket.DialOptions) (*websocket.Conn, *http.Response, error) {
+func connectTowsgw(ctx context.Context, proxyUrl string, connectOptions ...*websocket.DialOptions) (*websocket.Conn, *http.Response, error) {
 	options := defaultConnectOptions
 	if connectOptions != nil {
 		options = connectOptions[0]
 	}
-	return websocket.Dial(ctx, fmt.Sprintf("ws://%s%s", proxyUrl, wsproxy.ConnectPath), options)
+	return websocket.Dial(ctx, fmt.Sprintf("ws://%s%s", proxyUrl, wsgw.ConnectPath), options)
 }

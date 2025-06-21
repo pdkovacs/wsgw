@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 	"time"
-	wsproxy "wsproxy/internal"
-	"wsproxy/internal/logging"
-	"wsproxy/test/mockapp"
+	wsgw "wsgw/internal"
+	"wsgw/internal/logging"
+	"wsgw/test/mockapp"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/suite"
@@ -33,10 +33,10 @@ func (s *connectingTestSuite) TestConnectionID() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	connId := wsproxy.CreateID(ctx)
+	connId := wsgw.CreateID(ctx)
 	s.nextConnId = connId
 
-	client := NewClient(s.wsproxyServer, nil)
+	client := NewClient(s.wsgwerver, nil)
 
 	message := toWsMessage("hi")
 
@@ -68,10 +68,10 @@ func (s *connectingTestSuite) TestConnectingWithInvalidCredentials() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	connId := wsproxy.CreateID(ctx)
+	connId := wsgw.CreateID(ctx)
 	s.nextConnId = connId
 
-	client := NewClient(s.wsproxyServer, nil)
+	client := NewClient(s.wsgwerver, nil)
 
 	response, wsConnectErr := client.connect(ctx, &websocket.DialOptions{
 		HTTPHeader: http.Header{
@@ -88,10 +88,10 @@ func (s *connectingTestSuite) TestDisconnection() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	connId := wsproxy.CreateID(ctx)
+	connId := wsgw.CreateID(ctx)
 	s.nextConnId = connId
 
-	client := NewClient(s.wsproxyServer, nil)
+	client := NewClient(s.wsgwerver, nil)
 
 	s.mockApp.ExpectConnDisconn(connId)
 

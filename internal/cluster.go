@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"time"
-	"wsproxy/internal/config"
+	"wsgw/internal/config"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"

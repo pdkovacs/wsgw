@@ -1,43 +1,6 @@
 # End to end tests
 
-The architecture diagram is available [here](https://github.com/pdkovacs/wsgw/tree/main/doc/design/diagrams).
-
 ## Test application
-
-### Conversation support
-
-Conversations (correlated messages) between the client and the server are supported to support test scenarios more complex than just sending unrelated messages from and to the client.
-
-STOMP was considered, but, given its more general functionality, it is likely to create more overhead than needed.
-
-The test adds a custom "overlay" data structure to the messages to identify a conversations:
-
-```
-{
-    thread: {
-        initiator: "cli" | "app";
-        id: number;
-        itemId: number
-    }
-}
-```
-.
-
-### Message format
-
-```
-{
-    thread: {
-        initiator: "cli" | "app";
-        id: number;
-        itemId: number
-    };
-    payload: {
-        messageType: string;
-        data: any;
-    };
-}
-```
 
 ### Message types accepted by the test application
 

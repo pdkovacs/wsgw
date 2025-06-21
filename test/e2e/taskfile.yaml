@@ -1,0 +1,43 @@
+version: "3"
+
+includes:
+  app:
+    taskfile: ./app/taskfile.yaml
+    dir: ./app/
+
+env:
+  IMAGE_REPO: wsgw
+
+tasks:
+  build-ui:
+    sources:
+      - web/src/**/*
+      - ./taskfile.yaml
+    generates:
+      - web/dist/assets/**
+      - web/dist/index.html
+    cmds:
+      - |
+        cd ./web
+        npm run build
+  build-client-device:
+    cmds:
+      - |
+        cd ./client-device/cmd
+        GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o client-device main.go
+  aws-deploy:
+    cmds:
+      - |
+        . ${HOME}/.my-aws-config
+        . ${HOME}/.wsgw-test-cognito.secrets
+        cd ./deployment/aws/tf
+        terragrunt apply --all --queue-include-external
+        # terragrunt apply
+  aws-destroy:
+    cmds:
+      - |
+        . ${HOME}/.my-aws-config
+        . ${HOME}/.wsgw-test-cognito.secrets
+        cd ./deployment/aws/tf
+        terragrunt destroy --all --queue-include-external
+        # terragrunt apply

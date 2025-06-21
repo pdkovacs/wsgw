@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"bytes"
@@ -201,7 +201,6 @@ func connectHandler(
 		if subsErr != nil {
 			logger.Error().Msgf("Failed to accept WS connection request: %v", subsErr)
 			_ = g.Error(subsErr)
-			g.AbortWithStatus(500)
 			return
 		}
 
@@ -273,11 +272,11 @@ func pushHandler(authenticateBackend func(c *gin.Context) error, ws *wsConnectio
 		errPush := ws.push(g.Request.Context(), bodyAsString, ConnectionID(connectionIdStr))
 		if errPush == errConnectionNotFound {
 			if clusterSupport == nil {
-				logger.Info().Msg("Web-socket connection not found")
+				logger.Info().Msg("ws connection not found")
 				g.AbortWithStatus(http.StatusNotFound)
 				return
 			}
-			logger.Info().Msgf("Connection '%s' isn't managed here, publishing payload...", connectionIdStr)
+			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...")
 			errPush = clusterSupport.relayMessage(g.Request.Context(), ConnectionID(connectionIdStr), bodyAsString)
 		}
 

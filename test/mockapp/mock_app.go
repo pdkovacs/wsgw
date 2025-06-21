@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	wsproxy "wsproxy/internal"
-	"wsproxy/internal/logging"
+	wsgw "wsgw/internal"
+	"wsgw/internal/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -30,11 +30,11 @@ type MockApp interface {
 	Start() error
 	GetAppAddress() string
 	Stop()
-	SendToClient(connId wsproxy.ConnectionID, message MessageJSON) error
-	On(methodName string, connId wsproxy.ConnectionID, arguments ...any)
-	ExpectConnDisconn(connId wsproxy.ConnectionID)
-	GetCalls(connId wsproxy.ConnectionID) []mock.Call
-	OnDisconnect(connectionId wsproxy.ConnectionID) chan struct{}
+	SendToClient(connId wsgw.ConnectionID, message MessageJSON) error
+	On(methodName string, connId wsgw.ConnectionID, arguments ...any)
+	ExpectConnDisconn(connId wsgw.ConnectionID)
+	GetCalls(connId wsgw.ConnectionID) []mock.Call
+	OnDisconnect(connectionId wsgw.ConnectionID) chan struct{}
 }
 
 type MessageJSON map[string]string
@@ -62,20 +62,20 @@ func (m *MyMock) messageReceived(msg MessageJSON) {
 }
 
 type mockApplication struct {
-	// getWsproxyUrl makes available the URL of the WSGS server
-	getWsproxyUrl func() string
-	listener      net.Listener
-	stop          func()
-	logger        zerolog.Logger
-	connMocks     map[string]*MyMock
-	connMocksMux  sync.Mutex
+	// getwsgwUrl makes available the URL of the WSGS server
+	getwsgwUrl   func() string
+	listener     net.Listener
+	stop         func()
+	logger       zerolog.Logger
+	connMocks    map[string]*MyMock
+	connMocksMux sync.Mutex
 }
 
-func NewMockApp(getWsproxyUrl func() string) MockApp {
+func NewMockApp(getwsgwUrl func() string) MockApp {
 	return &mockApplication{
-		getWsproxyUrl: getWsproxyUrl,
-		logger:        logging.Get().With().Str("unit", "mockApplication").Logger(),
-		connMocks:     make(map[string]*MyMock),
+		getwsgwUrl: getwsgwUrl,
+		logger:     logging.Get().With().Str("unit", "mockApplication").Logger(),
+		connMocks:  make(map[string]*MyMock),
 	}
 }
 
@@ -116,18 +116,18 @@ func (m *mockApplication) Stop() {
 
 func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	rootEngine := gin.Default()
-	rootEngine.Use(wsproxy.RequestLogger("mockApplication"))
+	rootEngine.Use(wsgw.RequestLogger("mockApplication"))
 
 	ws := rootEngine.Group("/ws")
 
-	ws.GET(string(wsproxy.ConnectPath), func(g *gin.Context) {
+	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS connect handler").Logger()
 		req := g.Request
 		res := g
 		cred, hasCredHeader := req.Header["Authorization"]
 		logger.Debug().Msgf("Request has authorization header: %v and it is: %s", hasCredHeader, cred)
 		if !hasCredHeader {
-			_ = res.AbortWithError(500, errors.New("authorization header not found"))
+			_ = res.AbortWithError(http.StatusInternalServerError, errors.New("authorization header not found"))
 			return
 		}
 		if cred[0] == BadCredential {
@@ -135,35 +135,35 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 			return
 		}
 
-		connHeaderKey := wsproxy.ConnectionIDHeaderKey
+		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			m.connMocksMux.Lock()
 			defer m.connMocksMux.Unlock()
 
 			_, ok := m.connMocks[connId]
 			if !ok {
-				logger.Info().Str(wsproxy.ConnectionIDKey, connId).Msg("No mock for connection yet, creating...")
+				logger.Info().Str(wsgw.ConnectionIDKey, connId).Msg("No mock for connection yet, creating...")
 				m.connMocks[string(connId)] = newClientPeer()
-				res.Status(200)
+				res.Status(http.StatusOK)
 				return
 			}
 			m.connMocks[connId].connect()
 		}
 
-		res.Status(200)
+		res.Status(http.StatusOK)
 	})
 
-	ws.POST(string(wsproxy.DisonnectedPath), func(g *gin.Context) {
+	ws.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS disconnection handler").Logger()
 		req := g.Request
 		res := g
 
-		connHeaderKey := wsproxy.ConnectionIDHeaderKey
+		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			m.connMocksMux.Lock()
 			defer m.connMocksMux.Unlock()
 			if _, ok := m.connMocks[connId]; !ok {
-				logger.Error().Str(wsproxy.ConnectionIDKey, connId).Msg("connection not mocked")
+				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
 				res.Status(500)
 				return
 			}
@@ -171,12 +171,12 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 		}
 	})
 
-	ws.POST(string(wsproxy.MessagePath), func(g *gin.Context) {
+	ws.POST(string(wsgw.MessagePath), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS message handler").Logger()
 		req := g.Request
 		res := g
 
-		connHeaderKey := wsproxy.ConnectionIDHeaderKey
+		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			bodyAsBytes, readBodyErr := io.ReadAll(req.Body)
 			req.Body.Close()
@@ -188,7 +188,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 			m.connMocksMux.Lock()
 			defer m.connMocksMux.Unlock()
 			if _, ok := m.connMocks[connId]; !ok {
-				logger.Error().Str(wsproxy.ConnectionIDKey, connId).Msg("connection not mocked")
+				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
 				res.Status(500)
 				return
 			}
@@ -199,11 +199,11 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	return rootEngine, nil
 }
 
-func (m *mockApplication) OnDisconnect(connId wsproxy.ConnectionID) chan struct{} {
+func (m *mockApplication) OnDisconnect(connId wsgw.ConnectionID) chan struct{} {
 	return m.connMocks[string(connId)].disconnectNotification
 }
 
-func (m *mockApplication) On(methodName string, connId wsproxy.ConnectionID, arguments ...any) {
+func (m *mockApplication) On(methodName string, connId wsgw.ConnectionID, arguments ...any) {
 	m.connMocksMux.Lock()
 	defer m.connMocksMux.Unlock()
 	if _, ok := m.connMocks[string(connId)]; !ok {
@@ -212,12 +212,12 @@ func (m *mockApplication) On(methodName string, connId wsproxy.ConnectionID, arg
 	m.connMocks[string(connId)].On(methodName, arguments...)
 }
 
-func (s *mockApplication) ExpectConnDisconn(connId wsproxy.ConnectionID) {
+func (s *mockApplication) ExpectConnDisconn(connId wsgw.ConnectionID) {
 	s.On(MockMethodConnect, connId)
 	s.On(MockMethodDisconnected, connId)
 }
 
-func (m *mockApplication) GetCalls(connId wsproxy.ConnectionID) []mock.Call {
+func (m *mockApplication) GetCalls(connId wsgw.ConnectionID) []mock.Call {
 	m.connMocksMux.Lock()
 	defer m.connMocksMux.Unlock()
 	if _, ok := m.connMocks[string(connId)]; !ok {
@@ -226,8 +226,8 @@ func (m *mockApplication) GetCalls(connId wsproxy.ConnectionID) []mock.Call {
 	return m.connMocks[string(connId)].Calls
 }
 
-func (s *mockApplication) SendToClient(connId wsproxy.ConnectionID, message MessageJSON) error {
-	url := fmt.Sprintf("%s%s/%s", s.getWsproxyUrl(), wsproxy.MessagePath, connId)
+func (s *mockApplication) SendToClient(connId wsgw.ConnectionID, message MessageJSON) error {
+	url := fmt.Sprintf("%s%s/%s", s.getwsgwUrl(), wsgw.MessagePath, connId)
 	req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message["message"]))
 	if createReqErr != nil {
 		return createReqErr

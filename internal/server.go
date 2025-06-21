@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	"wsproxy/internal/config"
-	"wsproxy/internal/logging"
+	"wsgw/internal/config"
+	"wsgw/internal/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
@@ -55,7 +55,7 @@ func (s *Server) start(r http.Handler, ready func(port int, stop func())) error 
 		panic(fmt.Sprintf("Error while starting to listen at an ephemeral port: %v", err))
 	}
 	s.Addr = listener.Addr().String()
-	logger.Info().Msgf("wsproxy instance is listening at %s", s.Addr)
+	logger.Info().Msgf("wsgw instance is listening at %s", s.Addr)
 
 	_, port, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Server) start(r http.Handler, ready func(port int, stop func())) error 
 
 // SetupAndStart sets up and starts server.
 func (s *Server) SetupAndStart(ready func(port int, stop func())) error {
-	r := createWsproxyRequestHandler(s.configuration, s.createConnectionId, s.clusterSupport)
+	r := createWsgwRequestHandler(s.configuration, s.createConnectionId, s.clusterSupport)
 	return s.start(r, ready)
 }
 
@@ -107,7 +107,7 @@ func (s *Server) Stop() {
 	}
 }
 
-func createWsproxyRequestHandler(options config.Config, createConnectionId func() ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
+func createWsgwRequestHandler(options config.Config, createConnectionId func() ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
 	rootEngine := gin.Default()
 
 	rootEngine.Use(RequestLogger("websocketGatewayServer"))
@@ -161,44 +161,32 @@ func RequestLogger(unitName string) func(g *gin.Context) {
 	return func(g *gin.Context) {
 		start := time.Now()
 
-		l := logging.Get().With().Str("req_xid", xid.New().String()).Logger()
-
 		r := g.Request
+		l := logging.Get().With().
+			Str("req_xid", xid.New().String()).
+			Str("req_method", g.Request.Method).
+			Str("req_url", g.Request.URL.RequestURI()).
+			Logger()
+		l.Debug().Str("unit", unitName).
+			Str("user_agent", g.Request.UserAgent()).
+			Msg("incoming request starting")
 		g.Request = r.WithContext(l.WithContext(r.Context()))
 
-		lrw := newLoggingResponseWriter(g.Writer)
-
 		defer func() {
+			statusCode := g.Writer.Status()
+
 			panicVal := recover()
 			if panicVal != nil {
-				lrw.statusCode = http.StatusInternalServerError // ensure that the status code is updated
-				panic(panicVal)                                 // continue panicking
+				statusCode = http.StatusInternalServerError // ensure that the status code is updated
+				panic(panicVal)                             // continue panicking
 			}
-			l.
-				Info().
-				Str("unit", unitName).
-				Str("method", g.Request.Method).
-				Str("url", g.Request.URL.RequestURI()).
-				Str("user_agent", g.Request.UserAgent()).
-				Int("status_code", lrw.statusCode).
+
+			l.Info().
+				Int("status_code", statusCode).
 				Dur("elapsed_ms", time.Since(start)).
-				Msg("incoming request")
+				Msg("incoming request finished")
 		}()
 
 		g.Next()
 	}
-}
-
-type loggingResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
-	return &loggingResponseWriter{w, http.StatusOK}
-}
-
-func (lrw *loggingResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
 }

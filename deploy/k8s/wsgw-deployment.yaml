@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wsproxy
+  name: wsgw
   labels:
-    app: wsproxy
+    app: wsgw
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: wsproxy
+      app: wsgw
   template:
     metadata:
       labels:
-        app: wsproxy
+        app: wsgw
     spec:
       containers:
-      - name: wsproxy
-        image: wsproxy
+      - name: wsgw
+        image: wsgw
         imagePullPolicy: Never
         env:
         - name: MY_INSTANCE_IPADDRESS

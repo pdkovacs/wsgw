@@ -1,0 +1,4 @@
+backend.tf
+versions.tf
+.terraform
+.terragrunt-cache

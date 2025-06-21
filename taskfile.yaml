@@ -1,24 +1,30 @@
-version: '3'
+version: "3"
+
+includes:
+  e2e:
+    taskfile: ./test/e2e/taskfile.yaml
+    dir: ./test/e2e
 
 env:
   TARGETING_MINIKUBE: '{{.TARGETING_MINIKUBE | default "yes"}}'
-  IMAGE_REPO: wsproxy
+  IMAGE_REPO: wsgw
 
 vars:
-  APP: wsproxy
+  APP: wsgw
   GOOS: linux
   GOARCH: amd64
+  WSGW_LOG_FILE: '{{.WSGW_LOG_FILE | default "$HOME/workspace/logs/wsgw" }}'
 
 tasks:
   clean:
     cmds:
       - go clean -testcache
   test-all:
-    dotenv: [ ".test-env" ]
+    dotenv: [".test-env"]
     cmds:
       - go test -v -parallel 1 -timeout 600s ./test/...
   test-single:
-    dotenv: [ ".test-env" ]
+    dotenv: [".test-env"]
     cmds:
       - go test -v -parallel 1 -timeout 10s ./test/... -run '^TestClusterSupportTestSuite$$' # -testify.m '^TestSendReceiveMessagesFromAppMultiClients$'
       # - go test -v -parallel 1 -timeout 60s ./test/... -run '^TestSendMessageTestSuite$$' -testify.m '^TestSendReceiveMessagesFromAppMultiClients$$'
@@ -32,14 +38,26 @@ tasks:
   build:
     cmds:
       - task: buildinfo
-      - echo "GOOS {{.GOOS}} GOARCH {{.GOARCH}}"
-      - env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.APP}} cmd/main.go
+      - |
+        echo "GOOS {{.GOOS}} GOARCH {{.GOARCH}}"
+        cd cmd
+        env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.APP}}
     sources:
       - cmd/**/*
       - internal/**/*
       - taskfile.yaml
     generates:
       - "{{.APP}}"
+  watch:
+    cmds:
+      - |
+        export WSGW_EXEC_NAME="{{.APP}}"
+        export WSGW_LOG_FILE="{{.WSGW_LOG_FILE}}"
+        export WSGW_SERVER_PORT=45679
+        export WSGW_APP_BASE_URL=http://localhost:45678
+        export WSGW_LOAD_BALANCER_ADDRESS=localhost:5173
+        export LOG_LEVEL=debug
+        ./watch.sh
   docker:
     cmds:
       - task: build
@@ -50,12 +68,12 @@ tasks:
           echo "Targeting minikube..."
           eval $(minikube -p minikube docker-env)
         fi
-        docker build -t wsproxy:latest deploy/docker/
+        docker build -t wsgw:latest deploy/docker/
   cluster:
     cmds:
       - task: docker
       - kubectl apply -f deploy/k8s/redis-config.yaml
       - kubectl apply -f deploy/k8s/redis-deployment.yaml
       - kubectl apply -f deploy/k8s/redis-service.yaml
-      - kubectl apply -f deploy/k8s/wsproxy-deployment.yaml
-      - kubectl apply -f deploy/k8s/wsproxy-service.yaml
+      - kubectl apply -f deploy/k8s/wsgw-deployment.yaml
+      - kubectl apply -f deploy/k8s/wsgw-service.yaml

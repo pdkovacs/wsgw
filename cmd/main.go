@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	wsproxy "wsproxy/internal"
-	"wsproxy/internal/config"
-	"wsproxy/internal/logging"
+	wsgw "wsgw/internal"
+	"wsgw/internal/config"
+	"wsgw/internal/logging"
 )
 
 func main() {
@@ -44,11 +44,11 @@ func main() {
 			exitc <- struct{}{}
 		}()
 
-		app := wsproxy.NewServer(
+		app := wsgw.NewServer(
 			ctx,
 			conf,
-			func() wsproxy.ConnectionID {
-				return wsproxy.CreateID(ctx)
+			func() wsgw.ConnectionID {
+				return wsgw.CreateID(ctx)
 			},
 		)
 		errAppStart := app.SetupAndStart(func(port int, stop func()) {

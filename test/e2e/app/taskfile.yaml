@@ -1,0 +1,76 @@
+version: "3"
+
+vars:
+  DEV_LOG_FILE: '{{.DEV_LOG_FILE | default "$HOME/workspace/logs/e2e-app" }}'
+  UI_DIST: ../web/dist
+  GOOS: linux
+  GOARCH: amd64
+
+tasks:
+  buildinfo:
+    cmds:
+      - echo VERSION=0.0.1 > internal/config/buildinfo.txt
+      - printf "TIME=" >> internal/config/buildinfo.txt
+      - date +%Y-%m-%dT%H:%M:%S%z >> internal/config/buildinfo.txt
+      - printf "COMMIT=" >> internal/config/buildinfo.txt
+      - git rev-parse HEAD >> internal/config/buildinfo.txt
+  build:
+    cmds:
+      - task: buildinfo
+      - |
+        cd ./cmd
+        GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app main.go
+  build-with-ui:
+    cmds:
+      - task: build-ui
+      - rm -rf "{{.UI_DIST}}" || echo "No files to remove in {{.UI_DIST}}"
+      - cp -r {{.UI_DIST}} {{.UI_DIST}}
+      - task: build
+  watch:
+    cmds:
+      - |
+        password_base=crixcrax
+        nr_users=3
+        mkdir -p $(dirname {{.DEV_LOG_FILE}})
+
+        pwcreds="["
+        for nummer in $(seq 1 3); do
+          if test $nummer -gt 1; then
+            pwcreds="${pwcreds},"
+          fi
+          pwcreds="${pwcreds}{\"username\":\"user${nummer}\",\"password\":\"${password_base}${nummer}\"}"
+        done
+        pwcreds="${pwcreds}]"
+        echo "pwcreds: $pwcreds"
+
+        export SERVER_PORT=45678
+        export PASSWORD_CREDENTIALS="$pwcreds"
+        export WSGW_HOST=localhost
+        export WSGW_PORT=45679
+        export LOG_LEVEL=debug
+        export DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
+
+        ./watch.sh
+  run:
+    cmds:
+      - task: build
+      - |
+        password_base=crixcrax
+        nr_users=3
+        mkdir -p $(dirname {{.DEV_LOG_FILE}})
+
+        pwcreds="["
+        for nummer in $(seq 1 3); do
+          if test $nummer -gt 1; then
+            pwcreds="${pwcreds},"
+          fi
+          pwcreds="${pwcreds}{\"username\":\"user${nummer}\",\"password\":\"${password_base}${nummer}\"}"
+        done
+        pwcreds="${pwcreds}]"
+        echo "pwcreds: $pwcreds"
+
+        SERVER_PORT=45678 \
+          LOG_LEVEL=debug \
+          ./cmd/app \
+          --password-credentials "$(pwcreds)" 2>&1 |
+          tee {{.DEV_LOG_FILE}}
