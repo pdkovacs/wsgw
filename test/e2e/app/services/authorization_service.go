@@ -4,9 +4,9 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"wsproxy/internal/logging"
-	"wsproxy/test/e2e/app/config"
-	"wsproxy/test/e2e/app/security/authr"
+	"wsgw/internal/logging"
+	"wsgw/test/e2e/app/config"
+	"wsgw/test/e2e/app/security/authr"
 
 	"github.com/rs/zerolog"
 )

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"wsproxy/internal/logging"
+	"wsgw/internal/logging"
 
 	"github.com/rs/zerolog"
 )

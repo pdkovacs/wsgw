@@ -1,7 +1,7 @@
 version: '3'
 
 env:
-  IMAGE_REPO: wsproxy
+  IMAGE_REPO: wsgw
 
 vars:
   DEV_LOG_FILE: '{{.DEV_LOG_FILE | default "$HOME/workspace/logs/e2e-app" }}'
@@ -59,7 +59,7 @@ tasks:
     cmds:
     - |
       . ${HOME}/.my-aws-config
-      . ${HOME}/.wsproxy-test-cognito.secrets
+      . ${HOME}/.wsgw-test-cognito.secrets
       cd ./deployment/aws/tf
       terragrunt apply --all --queue-include-external
       # terragrunt apply
@@ -67,7 +67,7 @@ tasks:
     cmds:
     - |
       . ${HOME}/.my-aws-config
-      . ${HOME}/.wsproxy-test-cognito.secrets
+      . ${HOME}/.wsgw-test-cognito.secrets
       cd ./deployment/aws/tf
       terragrunt destroy --all --queue-include-external
       # terragrunt apply

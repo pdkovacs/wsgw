@@ -1,1 +1,1 @@
-vpc_name = "wsproxy-e2etest"
+vpc_name = "wsgw-e2etest"

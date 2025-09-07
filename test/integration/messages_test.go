@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 	"time"
-	wsproxy "wsproxy/internal"
-	"wsproxy/internal/logging"
-	"wsproxy/test/mockapp"
+	wsgw "wsgw/internal"
+	"wsgw/internal/logging"
+	"wsgw/test/mockapp"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
@@ -34,11 +34,11 @@ func (s *sendMessageTestSuite) TestSendAMessageToApp() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	s.connIdGenerator = func() wsproxy.ConnectionID {
-		return wsproxy.CreateID(ctx)
+	s.connIdGenerator = func() wsgw.ConnectionID {
+		return wsgw.CreateID(ctx)
 	}
 
-	client := NewClient(s.wsproxyServer, nil)
+	client := NewClient(s.wsgwerver, nil)
 	_, err := client.connect(ctx)
 	s.NoError(err)
 
@@ -72,13 +72,13 @@ func (s *sendMessageTestSuite) TestReceiveAMessageFromApp() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	s.connIdGenerator = func() wsproxy.ConnectionID {
-		return wsproxy.CreateID(ctx)
+	s.connIdGenerator = func() wsgw.ConnectionID {
+		return wsgw.CreateID(ctx)
 	}
 
 	msgFromAppChan := make(chan string)
 
-	client := NewClient(s.wsproxyServer, msgFromAppChan)
+	client := NewClient(s.wsgwerver, msgFromAppChan)
 	_, err := client.connect(ctx)
 	s.NoError(err)
 
@@ -108,7 +108,7 @@ func (s *sendMessageTestSuite) TestReceiveAMessageFromApp() {
 func (s *sendMessageTestSuite) testSendReceiveMessagesFromApp(ctx context.Context, logger zerolog.Logger, nrOneWayMessages int) {
 	msgFromAppChan := make(chan string, nrOneWayMessages)
 
-	client := NewClient(s.wsproxyServer, msgFromAppChan)
+	client := NewClient(s.wsgwerver, msgFromAppChan)
 	_, err := client.connect(ctx)
 	s.NoError(err)
 
@@ -197,8 +197,8 @@ func (s *sendMessageTestSuite) TestSendReceiveMessagesFromApp() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	s.connIdGenerator = func() wsproxy.ConnectionID {
-		return wsproxy.CreateID(ctx)
+	s.connIdGenerator = func() wsgw.ConnectionID {
+		return wsgw.CreateID(ctx)
 	}
 
 	nrOneWayMessages := 50
@@ -211,8 +211,8 @@ func (s *sendMessageTestSuite) TestSendReceiveMessagesFromAppMultiClients() {
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
-	s.connIdGenerator = func() wsproxy.ConnectionID {
-		return wsproxy.CreateID(ctx)
+	s.connIdGenerator = func() wsgw.ConnectionID {
+		return wsgw.CreateID(ctx)
 	}
 
 	nrOneWayMessages := 50

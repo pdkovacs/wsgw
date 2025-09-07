@@ -4,26 +4,26 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"wsproxy/internal/config"
-	"wsproxy/test/mockapp"
+	"wsgw/internal/config"
+	"wsgw/test/mockapp"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
-	wsproxy "wsproxy/internal"
+	wsgw "wsgw/internal"
 )
 
 type baseTestSuite struct {
 	suite.Suite
-	wsproxyServer   string
+	wsgwerver       string
 	ctx             context.Context
-	wsGateway       *wsproxy.Server
+	wsGateway       *wsgw.Server
 	mockApp         mockapp.MockApp
-	connIdGenerator func() wsproxy.ConnectionID
+	connIdGenerator func() wsgw.ConnectionID
 	// Fall-back connection-id in case no generator is specified to be used in strictly sequential test cases
 	// testing in isolation the connection setup itself
-	nextConnId wsproxy.ConnectionID
+	nextConnId wsgw.ConnectionID
 }
 
 func NewBaseTestSuite(ctx context.Context) *baseTestSuite {
@@ -34,7 +34,7 @@ func NewBaseTestSuite(ctx context.Context) *baseTestSuite {
 
 func (s *baseTestSuite) startMockApp() {
 	s.mockApp = mockapp.NewMockApp(func() string {
-		return fmt.Sprintf("http://%s", s.wsproxyServer)
+		return fmt.Sprintf("http://%s", s.wsgwerver)
 	})
 	mockAppStartErr := s.mockApp.Start()
 	if mockAppStartErr != nil {
@@ -48,7 +48,7 @@ func (s *baseTestSuite) SetupSuite() {
 
 	s.startMockApp()
 
-	server := wsproxy.NewServer(
+	server := wsgw.NewServer(
 		s.ctx,
 		config.Config{
 			ServerHost:          "localhost",
@@ -56,7 +56,7 @@ func (s *baseTestSuite) SetupSuite() {
 			AppBaseUrl:          fmt.Sprintf("http://%s", s.mockApp.GetAppAddress()),
 			LoadBalancerAddress: "",
 		},
-		func() wsproxy.ConnectionID {
+		func() wsgw.ConnectionID {
 			if s.connIdGenerator == nil {
 				return s.nextConnId
 			}
@@ -71,7 +71,7 @@ func (s *baseTestSuite) SetupSuite() {
 		logger.Debug().Msg("Setting up and starting the server...")
 		err := server.SetupAndStart(func(port int, _ func()) {
 			logger.Info().Msg("WsGateway is ready!")
-			s.wsproxyServer = fmt.Sprintf("localhost:%d", port)
+			s.wsgwerver = fmt.Sprintf("localhost:%d", port)
 			wg.Done()
 		})
 		logger.Warn().Err(err).Msg("error during server start")
@@ -88,7 +88,7 @@ func (s *baseTestSuite) TearDownSuite() {
 	}
 }
 
-func (s *baseTestSuite) getCall(connId wsproxy.ConnectionID, callIndex int) mock.Call {
+func (s *baseTestSuite) getCall(connId wsgw.ConnectionID, callIndex int) mock.Call {
 	calls := s.mockApp.GetCalls(connId)
 	return calls[callIndex]
 }

@@ -1,4 +1,4 @@
-module wsproxy
+module wsgw
 
 go 1.24
 

@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	"wsproxy/test/e2e/app/security/authr"
+	"wsgw/test/e2e/app/security/authr"
 )
 
 func NewUserService(authorizationService AuthorizationService) UserService {

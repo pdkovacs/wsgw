@@ -7,10 +7,10 @@ includes:
 
 env:
   TARGETING_MINIKUBE: '{{.TARGETING_MINIKUBE | default "yes"}}'
-  IMAGE_REPO: wsproxy
+  IMAGE_REPO: wsgw
 
 vars:
-  APP: wsproxy
+  APP: wsgw
   GOOS: linux
   GOARCH: amd64
 
@@ -55,12 +55,12 @@ tasks:
           echo "Targeting minikube..."
           eval $(minikube -p minikube docker-env)
         fi
-        docker build -t wsproxy:latest deploy/docker/
+        docker build -t wsgw:latest deploy/docker/
   cluster:
     cmds:
       - task: docker
       - kubectl apply -f deploy/k8s/redis-config.yaml
       - kubectl apply -f deploy/k8s/redis-deployment.yaml
       - kubectl apply -f deploy/k8s/redis-service.yaml
-      - kubectl apply -f deploy/k8s/wsproxy-deployment.yaml
-      - kubectl apply -f deploy/k8s/wsproxy-service.yaml
+      - kubectl apply -f deploy/k8s/wsgw-deployment.yaml
+      - kubectl apply -f deploy/k8s/wsgw-service.yaml

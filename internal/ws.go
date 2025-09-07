@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"wsproxy/internal/logging"
+	"wsgw/internal/logging"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"

@@ -2,10 +2,10 @@ package httpadapter
 
 import (
 	"net/http"
-	"wsproxy/test/e2e/app/config"
-	"wsproxy/test/e2e/app/security/authn"
-	"wsproxy/test/e2e/app/security/authr"
-	"wsproxy/test/e2e/app/services"
+	"wsgw/test/e2e/app/config"
+	"wsgw/test/e2e/app/security/authn"
+	"wsgw/test/e2e/app/security/authr"
+	"wsgw/test/e2e/app/services"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

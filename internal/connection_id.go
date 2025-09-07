@@ -1,4 +1,4 @@
-package wsproxy
+package wsgw
 
 import (
 	"context"

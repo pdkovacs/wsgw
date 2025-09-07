@@ -6,15 +6,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"wsproxy/internal/logging"
-	"wsproxy/test/e2e/app"
-	"wsproxy/test/e2e/app/config"
+	"wsgw/internal/logging"
+	"wsgw/test/e2e/app"
+	"wsgw/test/e2e/app/config"
 
 	"github.com/rs/zerolog"
 )
 
 const (
-	WSPROXY_URL_ENVVAR_NAME = "WSPROXY_URL"
+	WSGW_ENVVAR_NAME = "WSGW"
 )
 
 func main() {
@@ -45,12 +45,12 @@ func main() {
 		ctx,
 		conf,
 		func() string {
-			wsproxyURL := os.Getenv(WSPROXY_URL_ENVVAR_NAME)
-			if len(wsproxyURL) == 0 {
-				panic(fmt.Sprintf("Environment variable %s must be set", WSPROXY_URL_ENVVAR_NAME))
+			wsgw := os.Getenv(WSGW_ENVVAR_NAME)
+			if len(wsgw) == 0 {
+				panic(fmt.Sprintf("Environment variable %s must be set", WSGW_ENVVAR_NAME))
 			}
-			logger.Info().Str(WSPROXY_URL_ENVVAR_NAME, wsproxyURL)
-			return wsproxyURL
+			logger.Info().Str(WSGW_ENVVAR_NAME, wsgw)
+			return wsgw
 		},
 		func(port int, stop func()) {
 			stopServer = stop

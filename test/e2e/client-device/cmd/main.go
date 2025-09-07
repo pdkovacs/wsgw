@@ -1,8 +1,8 @@
 package main
 
 import (
-	"wsproxy/internal/logging"
-	app "wsproxy/test/e2e/app"
+	"wsgw/internal/logging"
+	app "wsgw/test/e2e/app"
 
 	"github.com/rs/zerolog"
 )

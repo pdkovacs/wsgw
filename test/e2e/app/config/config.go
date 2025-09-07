@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"wsproxy/internal/logging"
-	"wsproxy/test/e2e/app/security/authn"
+	"wsgw/internal/logging"
+	"wsgw/test/e2e/app/security/authn"
 )
 
 // PasswordCredentials holds password-credentials

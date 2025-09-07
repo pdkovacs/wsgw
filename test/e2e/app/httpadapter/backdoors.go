@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"wsproxy/test/e2e/app/security/authr"
+	"wsgw/test/e2e/app/security/authr"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

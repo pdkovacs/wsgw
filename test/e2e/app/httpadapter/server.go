@@ -12,13 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	wsproxy "wsproxy/internal"
-	"wsproxy/internal/app_errors"
-	"wsproxy/internal/logging"
-	"wsproxy/test/e2e/app/config"
-	"wsproxy/test/e2e/app/security/authn"
-	"wsproxy/test/e2e/app/services"
-	"wsproxy/test/e2e/app/web"
+	wsgw "wsgw/internal"
+	"wsgw/internal/app_errors"
+	"wsgw/internal/logging"
+	"wsgw/test/e2e/app/config"
+	"wsgw/test/e2e/app/security/authn"
+	"wsgw/test/e2e/app/services"
+	"wsgw/test/e2e/app/web"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/memstore"
@@ -40,14 +40,14 @@ type MessageJSON map[string]string
 type server struct {
 	listener      net.Listener
 	configuration config.Options
-	getWsproxyUrl func() string
+	getwsgw       func() string
 	logger        zerolog.Logger
 }
 
-func NewServer(configuration config.Options, getWsproxyUrl func() string) server {
+func NewServer(configuration config.Options, getwsgw func() string) server {
 	return server{
 		configuration: configuration,
-		getWsproxyUrl: getWsproxyUrl,
+		getwsgw:       getwsgw,
 		logger:        logging.Get().With().Str(logging.UnitLogger, "http-server").Logger(),
 	}
 }
@@ -93,7 +93,7 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 	userService := services.NewUserService(&authorizationService)
 
 	rootEngine := gin.Default()
-	rootEngine.Use(wsproxy.RequestLogger("e2etest-application"))
+	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
 
 	if options.AuthenticationType != authn.SchemeOIDCProxy {
 		gob.Register(SessionData{})
@@ -181,14 +181,14 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 
 		wsGroup := authorizedGroup.Group("/ws")
 		{
-			wsGroup.GET(string(wsproxy.ConnectPath), func(g *gin.Context) {
+			wsGroup.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
 				logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS connect handler").Logger()
 				req := g.Request
 				res := g
 
-				connHeaderKey := wsproxy.ConnectionIDHeaderKey
+				connHeaderKey := wsgw.ConnectionIDHeaderKey
 				if connId := req.Header.Get(connHeaderKey); connId != "" {
-					logger.Info().Str(wsproxy.ConnectionIDKey, connId).Str("connid", connId).Msg("Incoming connection request...")
+					logger.Info().Str(wsgw.ConnectionIDKey, connId).Str("connid", connId).Msg("Incoming connection request...")
 					res.Status(http.StatusOK)
 					return
 				}
@@ -196,23 +196,23 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 				res.Status(http.StatusOK)
 			})
 
-			wsGroup.POST(string(wsproxy.DisonnectedPath), func(g *gin.Context) {
+			wsGroup.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
 				logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS disconnection handler").Logger()
 				req := g.Request
 				res := g
 
-				connHeaderKey := wsproxy.ConnectionIDHeaderKey
+				connHeaderKey := wsgw.ConnectionIDHeaderKey
 				if connId := req.Header.Get(connHeaderKey); connId != "" {
-					logger.Error().Str(wsproxy.ConnectionIDKey, connId).Str("connid", connId).Msg("Disconnect requested")
+					logger.Error().Str(wsgw.ConnectionIDKey, connId).Str("connid", connId).Msg("Disconnect requested")
 					res.Status(http.StatusOK)
 					return
 				}
 			})
 
-			wsGroup.POST(string(wsproxy.MessagePath), func(g *gin.Context) {
+			wsGroup.POST(string(wsgw.MessagePath), func(g *gin.Context) {
 				logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS message handler").Logger()
 				req := g.Request
-				connHeaderKey := wsproxy.ConnectionIDHeaderKey
+				connHeaderKey := wsgw.ConnectionIDHeaderKey
 				if connId := req.Header.Get(connHeaderKey); connId != "" {
 					bodyAsBytes, readBodyErr := io.ReadAll(req.Body)
 					req.Body.Close()
@@ -222,7 +222,7 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 					}
 
 					message := parseMessageJSON(bodyAsBytes)
-					logger.Debug().Str(wsproxy.ConnectionIDKey, connId).Any("message", message).Msg("message received")
+					logger.Debug().Str(wsgw.ConnectionIDKey, connId).Any("message", message).Msg("message received")
 				}
 			})
 		}
@@ -277,8 +277,8 @@ func (s *server) Stop() {
 	}
 }
 
-func (s *server) SendToClient(connId wsproxy.ConnectionID, message MessageJSON) error {
-	url := fmt.Sprintf("%s%s/%s", s.getWsproxyUrl(), wsproxy.MessagePath, connId)
+func (s *server) SendToClient(connId wsgw.ConnectionID, message MessageJSON) error {
+	url := fmt.Sprintf("%s%s/%s", s.getwsgw(), wsgw.MessagePath, connId)
 	req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message["message"]))
 	if createReqErr != nil {
 		return createReqErr

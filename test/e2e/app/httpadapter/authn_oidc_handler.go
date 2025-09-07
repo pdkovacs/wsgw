@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"net/http"
 
-	"wsproxy/internal/logging"
-	"wsproxy/test/e2e/app/security/authr"
-	"wsproxy/test/e2e/app/services"
+	"wsgw/internal/logging"
+	"wsgw/test/e2e/app/security/authr"
+	"wsgw/test/e2e/app/services"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"

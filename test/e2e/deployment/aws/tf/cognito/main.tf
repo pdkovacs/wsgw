@@ -1,5 +1,5 @@
 resource "aws_cognito_user_pool" "pool" {
-  name                = "wsproxy-e2etest"
+  name                = "wsgw-e2etest"
   username_attributes = ["email"]
   email_configuration {
     email_sending_account = "COGNITO_DEFAULT"
@@ -7,7 +7,7 @@ resource "aws_cognito_user_pool" "pool" {
 }
 
 resource "aws_cognito_user_pool_domain" "main" {
-  domain       = "wsproxy-e2etest-mvudg7noyqu"
+  domain       = "wsgw-e2etest-mvudg7noyqu"
   user_pool_id = aws_cognito_user_pool.pool.id
 }
 

@@ -1,18 +1,18 @@
 FROM ubuntu:22.04
 
-LABEL Name="wsproxy"
+LABEL Name="wsgw"
 LABEL Version="1.0.0"
 
-RUN useradd -m --shell /bin/false wsproxy
+RUN useradd -m --shell /bin/false wsgw
 
 RUN apt-get update && apt-get install -y git curl && apt-get clean
-RUN mkdir -p /opt/wsproxy
-WORKDIR /opt/wsproxy
-COPY wsproxy ./
-RUN chmod +x wsproxy
+RUN mkdir -p /opt/wsgw
+WORKDIR /opt/wsgw
+COPY wsgw ./
+RUN chmod +x wsgw
 RUN ls -la /opt/
 EXPOSE 8080
 
-USER wsproxy
+USER wsgw
 
-CMD [ "/opt/wsproxy/wsproxy" ]
+CMD [ "/opt/wsgw/wsgw" ]

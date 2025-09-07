@@ -2,14 +2,14 @@ package app
 
 import (
 	"context"
-	"wsproxy/test/e2e/app/config"
-	"wsproxy/test/e2e/app/httpadapter"
+	"wsgw/test/e2e/app/config"
+	"wsgw/test/e2e/app/httpadapter"
 )
 
-func Start(ctx context.Context, conf config.Options, getWsproxyUrl func() string, ready func(port int, stop func())) error {
+func Start(ctx context.Context, conf config.Options, getwsgw func() string, ready func(port int, stop func())) error {
 	server := httpadapter.NewServer(
 		conf,
-		getWsproxyUrl,
+		getwsgw,
 	)
 
 	server.Start(conf, func(port int, stop func()) {

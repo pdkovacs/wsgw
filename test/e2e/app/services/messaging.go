@@ -2,8 +2,8 @@ package services
 
 import (
 	"context"
-	"wsproxy/internal/app_errors"
-	"wsproxy/internal/logging"
+	"wsgw/internal/app_errors"
+	"wsgw/internal/logging"
 
 	"github.com/rs/zerolog"
 )

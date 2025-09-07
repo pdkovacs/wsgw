@@ -6,7 +6,7 @@ remote_state {
   }
   config = {
     bucket = "bitkit.click-tf-state"
-    key    = "wsproxy/e2etest/${path_relative_to_include()}"
+    key    = "wsgw/e2etest/${path_relative_to_include()}"
     region = "eu-west-1"
     encrypt        = true
   }
@@ -49,8 +49,8 @@ terraform {
 inputs = {
   app_domain_name = get_env("APP_DOMAIN_NAME", "")
   acm_cert_domain = get_env("ACM_CERT_DOMAIN", "")
-  app_name = get_env("APP_NAME", "wsproxy-e2etest")
+  app_name = get_env("APP_NAME", "wsgw-e2etest")
   app_version = get_env("APP_VERSION", "")
-  testuser_password = get_env("WSPROXY_E2ETEST_USER_PASSWORD")
-  privileged_testuser_password = get_env("WSPROXY_E2ETEST_PRIVILEGED_USER_PASSWORD")
+  testuser_password = get_env("wsgw_E2ETEST_USER_PASSWORD")
+  privileged_testuser_password = get_env("wsgw_E2ETEST_PRIVILEGED_USER_PASSWORD")
 }
