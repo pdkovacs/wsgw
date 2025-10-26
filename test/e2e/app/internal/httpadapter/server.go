@@ -11,6 +11,7 @@ import (
 	wsgw "wsgw/internal"
 	"wsgw/internal/logging"
 	"wsgw/test/e2e/app/internal/config"
+	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
 	"wsgw/test/e2e/app/web"
 
@@ -85,6 +86,11 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 	logger := s.logger.With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
 	userService := services.NewUserService()
 
+	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(options.DynamodbURL)
+	if conntrackerErr != nil {
+		panic(fmt.Errorf("unable to create WSGW connection tracker %w", conntrackerErr))
+	}
+
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
 
@@ -115,11 +121,11 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 		authorizedGroup.GET("/users", userListHandler(userService, options.PasswordCredentials))
 
 		apiGroup := authorizedGroup.Group("/api")
-		apiGroup.POST("/message", messageHandler(fmt.Sprintf("http://%s:%d", options.WsgwHost, options.WsgwPort)))
+		apiGroup.POST("/message", messageHandler(fmt.Sprintf("http://%s:%d", options.WsgwHost, options.WsgwPort), wsConnections))
 
 		wsGroup := authorizedGroup.Group("/ws")
-		wsGroup.GET(string(wsgw.ConnectPath), connectWsHandler())
-		wsGroup.POST(string(wsgw.DisonnectedPath), disconnectWsHandler())
+		wsGroup.GET(string(wsgw.ConnectPath), connectWsHandler(wsConnections))
+		wsGroup.POST(string(wsgw.DisonnectedPath), disconnectWsHandler(wsConnections))
 		wsGroup.POST(string(wsgw.MessagePath), messageWsHanlder())
 	}
 
