@@ -11,24 +11,28 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var userWsConnmap = conntrack.NewUserWsConnectionMap()
-
-func connectWsHandler() func(g *gin.Context) {
+func connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
 		req := g.Request
 		res := g
 
+		userSessionData, ok := getSessionDataFromSession(g, &logger)
+		if !ok {
+			logger.Debug().Msg("failed to get userSessionData")
+			res.Status(http.StatusUnauthorized)
+			return
+		}
+
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
-			logger.Debug().Str(wsgw.ConnectionIDKey, connId).Str("connid", connId).Msg("incoming connection request...")
+			logger.Debug().Str("connid", connId).Msg("incoming connection request...")
 
-			userSessionData, ok := getSessionDataFromSession(g, &logger)
-			if !ok {
+			addErr := wsConnections.AddConnection(g.Request.Context(), userSessionData.UserInfo.UserId, connId)
+			if addErr != nil {
+				res.Status(http.StatusInternalServerError)
 				return
 			}
-
-			userWsConnmap.AddConnection(userSessionData.UserInfo.UserId, connId)
 
 			res.Status(http.StatusOK)
 			return
@@ -39,30 +43,37 @@ func connectWsHandler() func(g *gin.Context) {
 	}
 }
 
-func disconnectWsHandler() func(g *gin.Context) {
+func disconnectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
+		logger0 := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
 		req := g.Request
+
+		userSessionData, ok := getSessionDataFromSession(g, &logger0)
+		if !ok {
+			return
+		}
+		userId := userSessionData.UserInfo.UserId
+
+		logger0 = logger0.With().Str("userId", userId).Logger()
 
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
-			logger.Debug().Str(wsgw.ConnectionIDKey, connId).Str("connid", connId).Msg("incoming disconnection request...")
+			logger := logger0.With().Str("connid", connId).Logger()
+			logger.Debug().Msg("incoming disconnection request...")
 
-			userSessionData, ok := getSessionDataFromSession(g, &logger)
-			if !ok {
-				return
+			if success, errRemoveConn := wsConnections.RemoveConnection(g.Request.Context(), userId, connId); !success || errRemoveConn != nil {
+				if errRemoveConn != nil {
+					logger.Error().Err(errRemoveConn).Msg("failed to remove connection")
+					g.Status(http.StatusInternalServerError)
+					return
+				}
+				logger.Info().Msg("user has no ws connections")
 			}
-
-			userId := userSessionData.UserInfo.UserId
-
-			if !userWsConnmap.RemoveConnection(userId, connId) {
-				logger.Info().Str("userId", userId).Msg("user has no ws connections")
-			}
-
+			g.Status(http.StatusOK)
 			return
 		}
 
-		logger.Info().Msg("incoming ws disconnection request without connection-id")
+		logger0.Info().Msg("incoming ws disconnection request without connection-id")
 		g.Status(http.StatusBadRequest)
 	}
 }

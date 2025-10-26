@@ -62,5 +62,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message str
 		)
 	}
 
+	wg.Wait()
+
 	return err
 }

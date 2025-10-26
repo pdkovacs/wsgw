@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dynamodb-pv
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 5Gi
+  hostPath:
+    path: /data/dynamodb/
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamodb-pv-claim
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamodb-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynamodb-local
+  template:
+    metadata:
+      labels:
+        app: dynamodb-local
+    spec:
+      # NOTE: "fsGroup" et al. doesn't seem to work with minikube: https://stackoverflow.com/a/74309355/1194266 .
+      #       Hence the "hack" with "initContainers" below
+      # securityContext:
+      #   runAsUser: 1000
+      #   runAsGroup: 1000
+      #   fsGroup: 1000
+      initContainers:
+        - name: volume-permission
+          image: busybox
+          command: ["sh", "-c", "chown -R 1000:1000 /var/lib/dynamodbql/data"]
+          volumeMounts:
+            - mountPath: /var/lib/dynamodbql/data
+              name: dynamodb
+      containers:
+        - name: dynamodb
+          image: amazon/dynamodb-local:latest
+          imagePullPolicy: "IfNotPresent"
+          command:
+            [
+              "java",
+              "-jar",
+              "DynamoDBLocal.jar",
+              "-sharedDb",
+              "-dbPath",
+              "/var/lib/dynamodbql/data",
+            ]
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - mountPath: /var/lib/dynamodbql/data
+              name: dynamodb
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "2048Mi"
+              cpu: "1000m"
+      volumes:
+        - name: dynamodb
+          persistentVolumeClaim:
+            claimName: dynamodb-pv-claim

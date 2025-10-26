@@ -33,7 +33,7 @@ const App = () => {
 
 		if (configuration?.status === AsyncValueStatus.resolved && configuration.value && configuration.value?.wsgwHost.length > 0) {
 			const { wsgwHost, wsgwPort } = configuration.value;
-			dial(wsgwHost, wsgwPort, (message, error) => {
+			dial(wsgwHost, wsgwPort, 0, (message, error) => {
 				if (error) {
 					console.error("Error in websocket connection", error);
 				} else {

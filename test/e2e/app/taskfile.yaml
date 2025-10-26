@@ -29,6 +29,11 @@ tasks:
   watch:
     cmds:
       - |
+        # DynamoDB local
+        DYNAMODB_URL=http://10.98.45.101:8000
+        export AWS_ACCESS_KEY_ID=kalap
+        export AWS_SECRET_ACCESS_KEY=kabat
+
         password_base=crixcrax
         nr_users=3
         mkdir -p $(dirname {{.DEV_LOG_FILE}})

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamodb-quickcheck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynamodb-quickcheck
+  template:
+    metadata:
+      labels:
+        app: dynamodb-quickcheck
+    spec:
+      containers:
+        - name: dynamodb-quickcheck
+          image: amazon/aws-cli
+          ports:
+            - containerPort: 8080
+          env:
+            - name: "AWS_ACCESS_KEY_ID"
+              value: "DUMMYIDEXAMPLE"
+            - name: "AWS_SECRET_ACCESS_KEY"
+              value: "DUMMYEXAMPLEKEY"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              aws dynamodb describe-limits --endpoint-url http://dynamodb-local:8000 --region us-west-2;
+              while true; do sleep 5; done
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "100m"
