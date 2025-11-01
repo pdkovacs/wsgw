@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"wsgw/internal/logging"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -59,50 +60,48 @@ type appConnection struct {
 	httpClient http.Client
 }
 
+var errAppConnInternal = errors.New("internalError")
+var errAppConnAuthn = errors.New("authnError")
+var errAppConnAccepting = errors.New("appError")
+
 // Relays the connection request to the backend's `POST /ws/connect` endpoint and
-func handleClientConnecting(createConnectionId func() ConnectionID, appUrls applicationURLs) func(c *gin.Context) *appConnection {
-	return func(g *gin.Context) *appConnection {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", fmt.Sprintf("handleClientConnecting: %s", appUrls.connecting())).Logger()
+func handleClientConnecting(r *http.Request, createConnectionId func() ConnectionID, appUrls applicationURLs) (*appConnection, error) {
+	logger := zerolog.Ctx(r.Context()).With().Str(logging.MethodLogger, "handleClientConnecting").Logger()
 
-		request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
-		if err != nil {
-			logger.Error().Msgf("failed to create request object: %v", err)
-			g.AbortWithStatus(http.StatusInternalServerError)
-			return nil
-		}
-		request.Header = g.Request.Header
-
-		connId := createConnectionId()
-
-		request.Header.Add(ConnectionIDHeaderKey, string(connId))
-
-		client := http.Client{
-			Timeout: time.Second * 15,
-		}
-		response, requestErr := client.Do(request)
-		if requestErr != nil {
-			logger.Error().Msgf("failed to send request: %v", requestErr)
-			g.AbortWithStatus(http.StatusInternalServerError)
-			return nil
-		}
-		defer cleanupResponse(response)
-
-		if response.StatusCode == http.StatusUnauthorized {
-			logger.Info().Msg("Authentication failed")
-			g.AbortWithStatus(http.StatusUnauthorized)
-			return nil
-		}
-
-		if response.StatusCode != 200 {
-			logger.Info().Msgf("Received status code %d", response.StatusCode)
-			g.AbortWithStatus(http.StatusInternalServerError)
-			return nil
-		}
-
-		logger.Debug().Msgf("app has accepted: %v", connId)
-
-		return &appConnection{connId, client}
+	request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
+	if err != nil {
+		logger.Error().Msgf("failed to create request object: %v", err)
+		return nil, errAppConnInternal
 	}
+	request.Header = r.Header
+
+	connId := createConnectionId()
+
+	request.Header.Add(ConnectionIDHeaderKey, string(connId))
+
+	client := http.Client{
+		Timeout: time.Second * 15,
+	}
+	response, requestErr := client.Do(request)
+	if requestErr != nil {
+		logger.Error().Msgf("failed to send request: %v", requestErr)
+		return nil, errAppConnInternal
+	}
+	defer cleanupResponse(response)
+
+	if response.StatusCode == http.StatusUnauthorized {
+		logger.Info().Msg("Authentication failed")
+		return nil, errAppConnAuthn
+	}
+
+	if response.StatusCode != 200 {
+		logger.Info().Msgf("Received status code %d", response.StatusCode)
+		return nil, errAppConnAccepting
+	}
+
+	logger.Debug().Msgf("app has accepted: %v", connId)
+
+	return &appConnection{connId, client}, nil
 }
 
 func handleClientDisconnected(appUrls applicationURLs, appConn *appConnection, logger zerolog.Logger) {
@@ -185,9 +184,16 @@ func connectHandler(
 	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
-		appConn := handleClientConnecting(createConnectionId, appUrls)(g)
+		appConn, clientConnectErr := handleClientConnecting(g.Request, createConnectionId, appUrls)
 
-		if appConn == nil {
+		if clientConnectErr != nil {
+			switch clientConnectErr {
+			case errAppConnAccepting:
+			case errAppConnInternal:
+				g.AbortWithStatus(http.StatusInternalServerError)
+			case errAppConnAuthn:
+				g.AbortWithStatus(http.StatusUnauthorized)
+			}
 			return
 		}
 
@@ -199,7 +205,7 @@ func connectHandler(
 			OriginPatterns: []string{loadBalancerAddress},
 		})
 		if subsErr != nil {
-			logger.Error().Msgf("Failed to accept WS connection request: %v", subsErr)
+			logger.Error().Msgf("failed to accept ws connection request: %v", subsErr)
 			_ = g.Error(subsErr)
 			return
 		}
@@ -247,7 +253,7 @@ func connectHandler(
 	}
 }
 
-func pushHandler(authenticateBackend func(c *gin.Context) error, ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerFunc {
+func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerFunc {
 	return func(g *gin.Context) {
 		connectionIdStr := g.Param(connIdPathParamName)
 
@@ -263,7 +269,7 @@ func pushHandler(authenticateBackend func(c *gin.Context) error, ws *wsConnectio
 		g.Request.Body.Close()
 		if errReadRequest != nil {
 			logger.Error().Msgf("failed to read request body %T: %v", g.Request.Body, errReadRequest)
-			g.JSON(500, nil)
+			g.JSON(http.StatusInternalServerError, nil)
 			return
 		}
 
@@ -276,7 +282,7 @@ func pushHandler(authenticateBackend func(c *gin.Context) error, ws *wsConnectio
 				g.AbortWithStatus(http.StatusNotFound)
 				return
 			}
-			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...")
+			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...", connectionIdStr)
 			errPush = clusterSupport.relayMessage(g.Request.Context(), ConnectionID(connectionIdStr), bodyAsString)
 		}
 
