@@ -9,9 +9,9 @@ import (
 	wsgw "wsgw/internal"
 	"wsgw/test/mockapp"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/rs/zerolog"
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/wsjson"
 )
 
 var defaultConnectOptions = &websocket.DialOptions{
