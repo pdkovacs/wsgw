@@ -39,7 +39,7 @@ tasks:
         mkdir -p $(dirname {{.DEV_LOG_FILE}})
 
         pwcreds="["
-        for nummer in $(seq 1 3); do
+        for nummer in $(seq 1 30); do
           if test $nummer -gt 1; then
             pwcreds="${pwcreds},"
           fi
