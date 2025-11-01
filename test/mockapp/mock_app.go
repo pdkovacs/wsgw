@@ -164,7 +164,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 			defer m.connMocksMux.Unlock()
 			if _, ok := m.connMocks[connId]; !ok {
 				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
-				res.Status(500)
+				res.Status(http.StatusInternalServerError)
 				return
 			}
 			m.connMocks[connId].disconnected()
@@ -189,7 +189,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 			defer m.connMocksMux.Unlock()
 			if _, ok := m.connMocks[connId]; !ok {
 				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
-				res.Status(500)
+				res.Status(http.StatusInternalServerError)
 				return
 			}
 			m.connMocks[connId].messageReceived(parseMessageJSON(bodyAsBytes))

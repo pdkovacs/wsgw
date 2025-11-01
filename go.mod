@@ -6,7 +6,7 @@ require (
 	github.com/aws/smithy-go v1.23.1
 	github.com/coder/websocket v1.8.14
 	github.com/gin-contrib/sessions v1.0.4
-	github.com/gin-gonic/gin v1.11.0
+	github.com/gin-gonic/gin v1.11.1-0.20251031140907-2e22e5085960
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/v2 v2.3.0
 	github.com/redis/go-redis/v9 v9.16.0

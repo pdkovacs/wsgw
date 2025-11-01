@@ -132,7 +132,6 @@ func createWsgwRequestHandler(options config.Config, createConnectionId func() C
 	rootEngine.POST(
 		fmt.Sprintf("/message/:%s", connIdPathParamName),
 		pushHandler(
-			authenticateBackend,
 			wsConns,
 			clusterSupport,
 		),
