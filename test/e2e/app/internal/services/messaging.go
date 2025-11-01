@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/internal/logging"
@@ -24,45 +23,38 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message str
 
 	var err error
 
-	wg := sync.WaitGroup{}
 	for _, connId := range wsConnIds {
-		wg.Go(
-			func() {
-				url := fmt.Sprintf("%s%s/%s", wsgwUrl, wsgw.MessagePath, connId)
-				logger := logger0.With().Str("url", url).Logger()
+		url := fmt.Sprintf("%s%s/%s", wsgwUrl, wsgw.MessagePath, connId)
+		logger := logger0.With().Str("url", url).Logger()
 
-				logger.Debug().Msg("address to send to...")
-				req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message))
-				if createReqErr != nil {
-					logger.Error().Err(createReqErr).Msg("failed to create request")
-					return
-				}
-				client := http.Client{
-					Timeout: time.Second * 15,
-				}
-				response, sendReqErr := client.Do(req)
-				if sendReqErr != nil {
-					logger.Error().Err(sendReqErr).Msg("failed to send request")
-					err = sendReqErr
-					return
-				}
+		logger.Debug().Msg("address to send to...")
+		req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message))
+		if createReqErr != nil {
+			logger.Error().Err(createReqErr).Msg("failed to create request")
+			continue
+		}
+		client := http.Client{
+			Timeout: time.Second * 15,
+		}
+		response, sendReqErr := client.Do(req)
+		if sendReqErr != nil {
+			logger.Error().Err(sendReqErr).Msg("failed to send request")
+			err = sendReqErr
+			continue
+		}
 
-				if response.StatusCode != http.StatusNoContent {
-					if response.StatusCode == http.StatusNotFound {
-						discardConnId(connId)
-						logger.Info().Str("connId", connId).Msg("404: discarding ws connection reference")
-						return
-					}
+		if response.StatusCode != http.StatusNoContent {
+			if response.StatusCode == http.StatusNotFound {
+				discardConnId(connId)
+				logger.Info().Str("connId", connId).Msg("404: discarding ws connection reference")
+				continue
+			}
 
-					logger.Error().Str("url", url).Msg("failed to send request")
-					err = fmt.Errorf("sending message to client finished with unexpected HTTP status: %v", response.StatusCode)
-					return
-				}
-			},
-		)
+			logger.Error().Str("url", url).Msg("failed to send request")
+			err = fmt.Errorf("sending message to client finished with unexpected HTTP status: %v", response.StatusCode)
+			continue
+		}
 	}
-
-	wg.Wait()
 
 	return err
 }
