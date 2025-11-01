@@ -8,9 +8,9 @@ import (
 	"time"
 	"wsgw/internal/logging"
 
+	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
-	"nhooyr.io/websocket"
 )
 
 type connection struct {

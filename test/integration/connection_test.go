@@ -9,9 +9,9 @@ import (
 	"wsgw/internal/logging"
 	"wsgw/test/mockapp"
 
+	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/suite"
-	"nhooyr.io/websocket"
 )
 
 type connectingTestSuite struct {
