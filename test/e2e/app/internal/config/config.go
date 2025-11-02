@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"wsgw/internal/logging"
@@ -29,9 +28,9 @@ type Options struct {
 	SessionDbName              string `env:"SESSION_DB_NAME" long:"session-db-name" short:"" default:"" description:"Name of the session DB"`
 	DBHost                     string `env:"DB_HOST" long:"db-host" short:"" default:"localhost" description:"DB host"`
 	DBPort                     int    `env:"DB_PORT" long:"db-port" short:"" default:"5432" description:"DB port"`
-	DBName                     string `json:"dbName" env:"DB_NAME" long:"db-name" short:"" default:"iconrepo" description:"Name of the database"`
-	DBUser                     string `env:"DB_USER" long:"db-user" short:"" default:"iconrepo" description:"DB user"`
-	DBPassword                 string `env:"DB_PASSWORD" long:"db-password" short:"" default:"iconrepo" description:"DB password"`
+	DBName                     string `json:"dbName" env:"DB_NAME" long:"db-name" short:"" default:"wsgw" description:"Name of the database"`
+	DBUser                     string `env:"DB_USER" long:"db-user" short:"" default:"wsgw" description:"DB user"`
+	DBPassword                 string `env:"DB_PASSWORD" long:"db-password" short:"" default:"wsgw" description:"DB password"`
 	UsernameCookie             string `env:"USERNAME_COOKIE" long:"username-cookie" short:"" description:"The name of the cookie, if any, carrying username. Only OIDC for now."`
 	LogLevel                   string `env:"LOG_LEVEL" long:"log-level" short:"l" default:"info"`
 	AllowedClientURLsRegex     string `env:"ALLOWED_CLIENT_URLS_REGEX" long:"allowed-client-urls-regex" short:"" default:""`
@@ -39,10 +38,6 @@ type Options struct {
 	WsgwHost                   string `env:"WSGW_HOST" long:"wsgw-host" short:"" default:""`
 	WsgwPort                   int    `env:"WSGW_PORT" long:"wsgw-port" short:"" default:""`
 }
-
-var DefaultIconRepoHome = filepath.Join(os.Getenv("HOME"), ".ui-toolbox/iconrepo")
-var DefaultIconDataLocationGit = filepath.Join(DefaultIconRepoHome, "git-repo")
-var DefaultConfigFilePath = filepath.Join(DefaultIconRepoHome, "config.json")
 
 type ConfigFilePath string
 

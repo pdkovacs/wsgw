@@ -51,26 +51,11 @@ func Get() zerolog.Logger {
 		zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 		zerolog.TimeFieldFormat = time.RFC3339Nano
 
-		var output io.Writer = zerolog.ConsoleWriter{
-			Out:        os.Stdout,
-			TimeFormat: time.RFC3339,
-		}
+		var output io.Writer = os.Stdout
 
 		isDevelopmentEnv := func() bool {
 			return os.Getenv("APP_ENV") == "development"
 		}
-
-		// if !isDevelopmentEnv() {
-		// 	fileLogger := &lumberjack.Logger{
-		// 		Filename:   "iconrepo.log",
-		// 		MaxSize:    5,
-		// 		MaxBackups: 10,
-		// 		MaxAge:     14,
-		// 		Compress:   true,
-		// 	}
-
-		// 	output = zerolog.MultiLevelWriter(os.Stderr, fileLogger)
-		// }
 
 		var gitRevision string
 
