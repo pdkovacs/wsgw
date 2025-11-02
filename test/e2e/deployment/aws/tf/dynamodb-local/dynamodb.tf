@@ -1,5 +1,5 @@
 locals {
-  dynamodb_url = "http://10.98.45.101:8000"
+  dynamodb_url = "http://10.107.197.135:8000"
 }
 
 provider "aws" {

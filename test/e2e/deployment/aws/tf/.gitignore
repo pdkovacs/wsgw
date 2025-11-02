@@ -2,4 +2,5 @@ backend.tf
 versions.tf
 .terraform
 .terragrunt-cache
-terraform.tfstate.*
+terraform.tfstate
+terraform.tfstate*
