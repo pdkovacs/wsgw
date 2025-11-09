@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 	"wsgw/internal/logging"
 	app "wsgw/test/e2e/app/internal"
 	"wsgw/test/e2e/app/internal/config"
@@ -18,46 +19,58 @@ const (
 )
 
 func main() {
-	logger := logging.Get().Level(zerolog.GlobalLevel()).With().Str(logging.UnitLogger, "main").Logger()
-	logger.Info().Msg("Test application instance starting...")
-	ctx := logger.WithContext(context.Background())
-
-	conf := config.ParseCommandLineArgs(os.Args)
-
-	var stopServer func()
-	exitc := make(chan struct{})
-
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc,
+	ctx, cancelRequests := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGHUP,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
-		syscall.SIGQUIT)
+		syscall.SIGQUIT,
+		syscall.SIGURG)
+	defer cancelRequests()
+
+	logger := logging.Get().Level(zerolog.GlobalLevel()).With().Str(logging.UnitLogger, "main").Logger()
+	logger.Info().Msg("Test application instance starting...")
+	ctx = logger.WithContext(ctx)
+
+	conf := config.ParseCommandLineArgs(os.Args)
+
+	var shutdownServer func() error
+
+	srvErrChan := make(chan error, 1)
+	ready := func(port int, stop func() error) {
+		shutdownServer = func() error {
+			cancelRequests()
+			return stop()
+		}
+	}
 	go func() {
-		s := <-sigc
-		fmt.Fprintf(os.Stderr, "Caught %v, stopping server...\n", s)
-		stopServer()
-		fmt.Fprintln(os.Stderr, "Server stopped")
-		exitc <- struct{}{}
+		srvErr := app.Start(ctx, conf, getWsgw, ready)
+		logger.Info().Msgf("server returned with %v\n", srvErr)
+		srvErrChan <- srvErr
 	}()
 
-	startErr := app.Start(
-		ctx,
-		conf,
-		func() string {
-			wsgw := os.Getenv(WSGW_ENVVAR_NAME)
-			if len(wsgw) == 0 {
-				panic(fmt.Sprintf("Environment variable %s must be set", WSGW_ENVVAR_NAME))
-			}
-			logger.Info().Str(WSGW_ENVVAR_NAME, wsgw)
-			return wsgw
-		},
-		func(port int, stop func()) {
-			stopServer = stop
-		},
-	)
-	if startErr != nil {
-		logger.Error().Err(startErr).Msg("E2EApp failed to start")
-		os.Exit(1)
+	<-ctx.Done()
+	logger.Info().Msg("server context canceled")
+
+	shutdownErr := shutdownServer()
+	logger.Info().Msgf("server shut down with %v\n", shutdownErr)
+
+	select {
+	case srvErr := <-srvErrChan:
+		logger.Info().Msgf("server exited with error: %v\n", srvErr)
+	case <-time.After(time.Second * 20):
+		logger.Info().Msgf("server didn't shutdown within 20 seconds\n")
 	}
+
+	logger.Info().Msg("Exiting...")
+}
+
+var getWsgw = func() string {
+	wsgw := os.Getenv(WSGW_ENVVAR_NAME)
+	if len(wsgw) == 0 {
+		panic(fmt.Sprintf("Environment variable %s must be set", WSGW_ENVVAR_NAME))
+	}
+	return wsgw
 }

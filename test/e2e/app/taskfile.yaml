@@ -74,8 +74,13 @@ tasks:
         pwcreds="${pwcreds}]"
         echo "pwcreds: $pwcreds"
 
-        SERVER_PORT=45678 \
-          LOG_LEVEL=debug \
-          ./cmd/app \
+        export SERVER_PORT=45678
+        export PASSWORD_CREDENTIALS="$pwcreds"
+        export WSGW_HOST=localhost
+        export WSGW_PORT=45679
+        export LOG_LEVEL=debug
+        export DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
+
+        ./cmd/app \
           --password-credentials "$(pwcreds)" 2>&1 |
           tee {{.DEV_LOG_FILE}}

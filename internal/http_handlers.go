@@ -65,7 +65,7 @@ var errAppConnAuthn = errors.New("authnError")
 var errAppConnAccepting = errors.New("appError")
 
 // Relays the connection request to the backend's `POST /ws/connect` endpoint and
-func handleClientConnecting(r *http.Request, createConnectionId func() ConnectionID, appUrls applicationURLs) (*appConnection, error) {
+func handleClientConnecting(r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Str(logging.MethodLogger, "handleClientConnecting").Logger()
 
 	request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
@@ -75,7 +75,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func() Connectio
 	}
 	request.Header = r.Header
 
-	connId := createConnectionId()
+	connId := createConnectionId(r.Context())
 
 	request.Header.Add(ConnectionIDHeaderKey, string(connId))
 
@@ -105,7 +105,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func() Connectio
 }
 
 func handleClientDisconnected(appUrls applicationURLs, appConn *appConnection, logger zerolog.Logger) {
-	logger = logger.With().Str("method", "handleClientDisconnected").Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
+	logger = logger.With().Str(logging.MethodLogger, "handleClientDisconnected").Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 	logger.Debug().Msg("BEGIN")
 
@@ -180,7 +180,7 @@ func connectHandler(
 	appUrls applicationURLs,
 	ws *wsConnections,
 	loadBalancerAddress string,
-	createConnectionId func() ConnectionID,
+	createConnectionId func(ctx context.Context) ConnectionID,
 	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
@@ -197,9 +197,9 @@ func connectHandler(
 			return
 		}
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "authentication handler").Str(ConnectionIDKey, string(appConn.id)).Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "authentication handler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
-		// logger = logger.().Str("method", "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
+		// logger = logger.().Str(logging.MethodLogger, "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 		wsConn, subsErr := websocket.Accept(g.Writer, g.Request, &websocket.AcceptOptions{
 			OriginPatterns: []string{loadBalancerAddress},
@@ -257,7 +257,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 	return func(g *gin.Context) {
 		connectionIdStr := g.Param(connIdPathParamName)
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "pushHandler").Str(ConnectionIDKey, connectionIdStr).Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "pushHandler").Str(ConnectionIDKey, connectionIdStr).Logger()
 
 		if connectionIdStr == "" {
 			logger.Info().Msgf("Missing path param: %s", connIdPathParamName)

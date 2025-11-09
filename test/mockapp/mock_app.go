@@ -1,6 +1,7 @@
 package mockapp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,9 +28,9 @@ const (
 )
 
 type MockApp interface {
-	Start() error
+	Start(ctx context.Context) error
 	GetAppAddress() string
-	Stop()
+	Stop(ctx context.Context)
 	SendToClient(connId wsgw.ConnectionID, message MessageJSON) error
 	On(methodName string, connId wsgw.ConnectionID, arguments ...any)
 	ExpectConnDisconn(connId wsgw.ConnectionID)
@@ -65,7 +66,7 @@ type mockApplication struct {
 	// getwsgwUrl makes available the URL of the WSGS server
 	getwsgwUrl   func() string
 	listener     net.Listener
-	stop         func()
+	stop         func(ctx context.Context)
 	logger       zerolog.Logger
 	connMocks    map[string]*MyMock
 	connMocksMux sync.Mutex
@@ -79,7 +80,7 @@ func NewMockApp(getwsgwUrl func() string) MockApp {
 	}
 }
 
-func (m *mockApplication) Start() error {
+func (m *mockApplication) Start(ctx context.Context) error {
 	address := fmt.Sprintf(":%d", 0)
 	listener, listenErr := net.Listen("tcp", address)
 	if listenErr != nil {
@@ -99,7 +100,7 @@ func (m *mockApplication) Start() error {
 		}
 	}()
 
-	m.stop = func() {
+	m.stop = func(ctx context.Context) {
 		listener.Close()
 	}
 
@@ -110,8 +111,8 @@ func (m *mockApplication) GetAppAddress() string {
 	return m.listener.Addr().String()
 }
 
-func (m *mockApplication) Stop() {
-	m.stop()
+func (m *mockApplication) Stop(ctx context.Context) {
+	m.stop(ctx)
 }
 
 func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
@@ -121,7 +122,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	ws := rootEngine.Group("/ws")
 
 	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS connect handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS connect handler").Logger()
 		req := g.Request
 		res := g
 		cred, hasCredHeader := req.Header["Authorization"]
@@ -154,7 +155,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	})
 
 	ws.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS disconnection handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS disconnection handler").Logger()
 		req := g.Request
 		res := g
 
@@ -172,7 +173,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	})
 
 	ws.POST(string(wsgw.MessagePath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str("method", "WS message handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS message handler").Logger()
 		req := g.Request
 		res := g
 

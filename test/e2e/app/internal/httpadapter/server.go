@@ -1,6 +1,7 @@
 package httpadapter
 
 import (
+	"context"
 	"database/sql"
 	"encoding/gob"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 	wsgw "wsgw/internal"
 	"wsgw/internal/logging"
 	"wsgw/test/e2e/app/internal/config"
@@ -33,57 +35,42 @@ const (
 type MessageJSON map[string]string
 
 type server struct {
-	listener      net.Listener
-	configuration config.Options
-	getwsgw       func() string
-	logger        zerolog.Logger
+	server  *http.Server
+	getwsgw func() string
 }
 
-func NewServer(configuration config.Options, getwsgw func() string) server {
+func NewServer(getwsgw func() string) server {
 	return server{
-		configuration: configuration,
-		getwsgw:       getwsgw,
-		logger:        logging.Get().With().Str(logging.UnitLogger, "http-server").Logger(),
+		getwsgw: getwsgw,
 	}
-}
-
-// start starts the service
-func (s *server) start(portRequested int, r http.Handler, ready func(port int, stop func())) {
-	logger := s.logger.With().Str(logging.MethodLogger, "StartServer").Logger()
-	logger.Info().Msg("Starting server on ephemeral....")
-	var err error
-
-	s.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", portRequested))
-	if err != nil {
-		panic(fmt.Sprintf("Error while starting to listen at an ephemeral port: %v", err))
-	}
-
-	_, port, err := net.SplitHostPort(s.listener.Addr().String())
-	if err != nil {
-		panic(fmt.Sprintf("Error while parsing the server address: %v", err))
-	}
-
-	logger.Info().Str("port", port).Msg("started to listen")
-
-	if ready != nil {
-		portAsInt, err := strconv.Atoi(port)
-		if err != nil {
-			panic(err)
-		}
-		ready(portAsInt, s.Stop)
-	}
-
-	http.Serve(s.listener, r)
 }
 
 // SetupAndStart sets up and starts server.
-func (s *server) Start(options config.Options, ready func(port int, stop func())) {
-	r := s.initEndpoints(options)
-	s.start(options.ServerPort, r, ready)
+func (s *server) Start(serverCtx context.Context, options config.Options, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+	r := s.initEndpoints(serverCtx, options)
+	return s.start(serverCtx, options.ServerPort, r, ready)
 }
 
-func (s *server) initEndpoints(options config.Options) *gin.Engine {
-	logger := s.logger.With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
+// Stop kills the listener
+func (s *server) Stop(ctx context.Context) error {
+	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "Stop").Logger()
+
+	shutdownTimeout := 10 * time.Second
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	logger.Debug().Dur("shutdownTimeout", shutdownTimeout).Msg("shutting server down")
+	shutdownErr := s.server.Shutdown(shutdownCtx)
+	logger.Debug().Msg("server shut down")
+	if shutdownErr != nil {
+		logger.Error().Err(shutdownErr).Msg("error while shutting down the server")
+	} else {
+		logger.Info().Msg("server shut successfully down")
+	}
+	return shutdownErr
+}
+
+func (s *server) initEndpoints(ctx context.Context, options config.Options) *gin.Engine {
+	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
 	userService := services.NewUserService()
 
 	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(options.DynamodbURL)
@@ -95,14 +82,17 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
 
 	gob.Register(SessionData{})
-	store, createStoreErr := s.createSessionStore(options)
+	connProps := config.CreateDbProperties(options, logger)
+	connProps.Database = options.SessionDbName
+	store, createStoreErr := s.createSessionStore(ctx, connProps)
 	if createStoreErr != nil {
 		panic(createStoreErr)
 	}
 	store.Options(sessions.Options{MaxAge: options.SessionMaxAge})
+
 	rootEngine.Use(sessions.Sessions("mysession", store))
 
-	rootEngine.NoRoute(authentication(options, &userService, s.logger.With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
+	rootEngine.NoRoute(authentication(options, &userService, zerolog.Ctx(ctx).With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, config.GetBuildInfo())
@@ -127,30 +117,38 @@ func (s *server) initEndpoints(options config.Options) *gin.Engine {
 		wsGroup.GET(string(wsgw.ConnectPath), connectWsHandler(wsConnections))
 		wsGroup.POST(string(wsgw.DisonnectedPath), disconnectWsHandler(wsConnections))
 		wsGroup.POST(string(wsgw.MessagePath), messageWsHanlder())
+
+		authorizedGroup.POST("/longrequest", func(g *gin.Context) {
+			reqCtx := g.Request.Context()
+			loggerReq := zerolog.Ctx(reqCtx)
+			loggerReq.Info().Msg("about enter select")
+
+			<-time.After(15 * time.Hour)
+			loggerReq.Info().Msgf("request completed: %v", reqCtx.Err())
+			g.JSON(200, gin.H{"status": "completed"})
+			g.Status(200)
+		})
 	}
 
 	return rootEngine
 }
 
-func (s *server) createSessionStore(options config.Options) (sessions.Store, error) {
+func (s *server) createSessionStore(ctx context.Context, connProps config.DbConnectionProperties) (sessions.Store, error) {
 	var store sessions.Store
-	logger := s.logger.With().Str(logging.MethodLogger, "create-session properties").Logger()
+	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "create-session properties").Logger()
 
-	if options.SessionDbName == "" {
+	if connProps.Database == "" {
 		logger.Info().Msg("Using in-memory session store")
 		store = memstore.NewStore([]byte("secret"))
-	} else if len(options.DynamodbURL) > 0 {
-		panic("DynamoDB session store is not supported yet")
-	} else if len(options.DBHost) > 0 {
-		logger.Info().Str("database", options.SessionDbName).Msg("connecting to session store")
-		connProps := config.CreateDbProperties(s.configuration, logger)
+	} else if len(connProps.Host) > 0 {
+		logger.Info().Interface("sessionStore", connProps).Send()
 		connStr := fmt.Sprintf(
 			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
 			connProps.User,
 			connProps.Password,
 			connProps.Host,
 			connProps.Port,
-			options.SessionDbName,
+			connProps.Database,
 		)
 		sessionDb, openSessionDbErr := sql.Open("pgx", connStr)
 		if openSessionDbErr != nil {
@@ -167,15 +165,42 @@ func (s *server) createSessionStore(options config.Options) (sessions.Store, err
 	return store, nil
 }
 
-// Stop kills the listener
-func (s *server) Stop() {
-	logger := s.logger.With().Str(logging.MethodLogger, "ListenerKiller").Logger()
-	error := s.listener.Close()
-	if error != nil {
-		logger.Error().Err(error).Interface("listener", s.listener).Msg("Error while closing listener")
-	} else {
-		logger.Info().Interface("listener", s.listener).Msg("Listener closed successfully")
+// start starts the service
+func (s *server) start(serverCtx context.Context, portRequested int, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "StartServer").Logger()
+	logger.Info().Msg("Starting server on ephemeral....")
+
+	lstnr, lstnrErr := net.Listen("tcp", fmt.Sprintf(":%d", portRequested))
+	if lstnrErr != nil {
+		panic(fmt.Sprintf("Error while starting to listen at an ephemeral port: %v", lstnrErr))
 	}
+
+	_, port, err := net.SplitHostPort(lstnr.Addr().String())
+	if err != nil {
+		panic(fmt.Sprintf("Error while parsing the server address: %v", err))
+	}
+
+	logger.Info().Str("port", port).Msg("started to listen")
+
+	if ready != nil {
+		portAsInt, err := strconv.Atoi(port)
+		if err != nil {
+			panic(err)
+		}
+		ready(serverCtx, portAsInt, s.Stop)
+	}
+
+	s.server = &http.Server{
+		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	logger.Info().Msg("starting to serve...")
+	srvErr := s.server.Serve(lstnr)
+	logger.Info().Msgf("serve returned %#v", srvErr)
+	return srvErr
 }
 
 func parseMessageJSON(value []byte) MessageJSON {

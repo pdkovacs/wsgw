@@ -3,11 +3,13 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync"
 	"wsgw/internal/config"
+	"wsgw/internal/logging"
 	"wsgw/test/mockapp"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
@@ -18,6 +20,7 @@ type baseTestSuite struct {
 	suite.Suite
 	wsgwerver       string
 	ctx             context.Context
+	cancel          context.CancelFunc
 	wsGateway       *wsgw.Server
 	mockApp         mockapp.MockApp
 	connIdGenerator func() wsgw.ConnectionID
@@ -36,27 +39,33 @@ func (s *baseTestSuite) startMockApp() {
 	s.mockApp = mockapp.NewMockApp(func() string {
 		return fmt.Sprintf("http://%s", s.wsgwerver)
 	})
-	mockAppStartErr := s.mockApp.Start()
+	mockAppStartErr := s.mockApp.Start(s.ctx)
 	if mockAppStartErr != nil {
 		panic(mockAppStartErr)
 	}
 }
 
 func (s *baseTestSuite) SetupSuite() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "SetupSuite").Logger()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	s.cancel = stop
+
+	logger := logging.Get().With().Str(logging.MethodLogger, "SetupSuite").Logger()
+	s.ctx = logger.WithContext(ctx)
+
 	logger.Info().Msg("BEGIN")
 
 	s.startMockApp()
 
+	configuration := config.Config{
+		ServerHost:          "localhost",
+		ServerPort:          0,
+		AppBaseUrl:          fmt.Sprintf("http://%s", s.mockApp.GetAppAddress()),
+		LoadBalancerAddress: "",
+	}
+
 	server := wsgw.NewServer(
-		s.ctx,
-		config.Config{
-			ServerHost:          "localhost",
-			ServerPort:          0,
-			AppBaseUrl:          fmt.Sprintf("http://%s", s.mockApp.GetAppAddress()),
-			LoadBalancerAddress: "",
-		},
-		func() wsgw.ConnectionID {
+		configuration,
+		func(_ context.Context) wsgw.ConnectionID {
 			if s.connIdGenerator == nil {
 				return s.nextConnId
 			}
@@ -69,11 +78,14 @@ func (s *baseTestSuite) SetupSuite() {
 	wg.Add(1)
 	go func() {
 		logger.Debug().Msg("Setting up and starting the server...")
-		err := server.SetupAndStart(func(port int, _ func()) {
-			logger.Info().Msg("WsGateway is ready!")
-			s.wsgwerver = fmt.Sprintf("localhost:%d", port)
-			wg.Done()
-		})
+		err := server.SetupAndStart(
+			s.ctx,
+			configuration,
+			func(ctx context.Context, port int, _ func(ctx context.Context) error) {
+				logger.Info().Msg("WsGateway is ready!")
+				s.wsgwerver = fmt.Sprintf("localhost:%d", port)
+				wg.Done()
+			})
 		logger.Warn().Err(err).Msg("error during server start")
 	}()
 	wg.Wait()
@@ -81,11 +93,12 @@ func (s *baseTestSuite) SetupSuite() {
 
 func (s *baseTestSuite) TearDownSuite() {
 	if s.mockApp != nil {
-		s.mockApp.Stop()
+		s.mockApp.Stop(s.ctx)
 	}
 	if s.wsGateway != nil {
-		s.wsGateway.Stop()
+		s.wsGateway.Stop(s.ctx)
 	}
+	s.cancel()
 }
 
 func (s *baseTestSuite) getCall(connId wsgw.ConnectionID, callIndex int) mock.Call {

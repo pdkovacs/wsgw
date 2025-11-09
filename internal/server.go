@@ -24,67 +24,25 @@ const (
 )
 
 type Server struct {
-	Addr               string
-	createConnectionId func() ConnectionID
-	clusterSupport     *ClusterSupport
 	server             http.Server
-	configuration      config.Config
-	ctx                context.Context
+	createConnectionId func(ctx context.Context) ConnectionID
+	clusterSupport     *ClusterSupport
 }
 
 func NewServer(
-	ctx context.Context,
 	configuration config.Config,
-	createConnectionId func() ConnectionID,
+	createConnectionId func(ctx context.Context) ConnectionID,
 ) *Server {
 	return &Server{
-		configuration:      configuration,
 		createConnectionId: createConnectionId,
 		clusterSupport:     NewClusterSupport(configuration),
-		ctx:                ctx,
 	}
-}
-
-// start starts the service
-func (s *Server) start(r http.Handler, ready func(port int, stop func())) error {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "start").Logger()
-	logger.Info().Msg("Starting server on ephemeral....")
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.configuration.ServerHost, s.configuration.ServerPort))
-	if err != nil {
-		panic(fmt.Sprintf("Error while starting to listen at an ephemeral port: %v", err))
-	}
-	s.Addr = listener.Addr().String()
-	logger.Info().Msgf("wsgw instance is listening at %s", s.Addr)
-
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	if err != nil {
-		panic(fmt.Sprintf("Error while parsing the server address: %v", err))
-	}
-
-	logger.Info().Msgf("Listening on port: %v", port)
-
-	if ready != nil {
-		portAsInt, err := strconv.Atoi(port)
-		if err != nil {
-			panic(err)
-		}
-		ready(portAsInt, s.Stop)
-	}
-
-	server := &http.Server{
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	return server.Serve(listener)
 }
 
 // SetupAndStart sets up and starts server.
-func (s *Server) SetupAndStart(ready func(port int, stop func())) error {
-	r := createWsgwRequestHandler(s.configuration, s.createConnectionId, s.clusterSupport)
-	return s.start(r, ready)
+func (s *Server) SetupAndStart(serverCtx context.Context, configuration config.Config, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+	r := createWsgwRequestHandler(configuration, s.createConnectionId, s.clusterSupport)
+	return s.start(serverCtx, configuration, r, ready)
 }
 
 // For now, we assume that the backend authentication is managed ex-machina by the environment (AWS role or K8S NetworkPolicy
@@ -95,19 +53,56 @@ func authenticateBackend(c *gin.Context) error {
 	return nil
 }
 
+// start starts the service
+func (s *Server) start(serverCtx context.Context, configuration config.Config, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "start").Logger()
+
+	endpoint := fmt.Sprintf("%s:%d", configuration.ServerHost, configuration.ServerPort)
+	listener, err := net.Listen("tcp", endpoint)
+	if err != nil {
+		panic(fmt.Sprintf("Error while starting to listen at: %s", endpoint))
+	}
+	logger.Info().Msgf("test application instance is listening at %s", listener.Addr().String())
+
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		panic(fmt.Sprintf("Error while parsing the server address: %v", err))
+	}
+
+	logger.Info().Msgf("Listening on port: %s", port)
+
+	if ready != nil {
+		portAsInt, err := strconv.Atoi(port)
+		if err != nil {
+			panic(err)
+		}
+		ready(serverCtx, portAsInt, s.Stop)
+	}
+
+	server := &http.Server{
+		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	return server.Serve(listener)
+}
+
 // Stop kills the listener
-func (s *Server) Stop() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "stop").Logger()
+func (s *Server) Stop(ctx context.Context) error {
+	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "stop").Logger()
 	logger.Info().Msgf("Shutting down server...")
-	error := s.server.Shutdown(s.ctx)
-	if error != nil {
-		logger.Error().Msgf("Error while shutting down server: %v", error)
+	shutdownErr := s.server.Shutdown(ctx)
+	if shutdownErr != nil {
+		logger.Error().Msgf("Error while shutting down server: %v", shutdownErr)
 	} else {
 		logger.Info().Msg("Server shutdown successfully")
 	}
+	return shutdownErr
 }
 
-func createWsgwRequestHandler(options config.Config, createConnectionId func() ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
+func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
 	rootEngine := gin.Default()
 
 	rootEngine.Use(RequestLogger("websocketGatewayServer"))
@@ -115,7 +110,7 @@ func createWsgwRequestHandler(options config.Config, createConnectionId func() C
 	wsConns := newWsConnections()
 
 	appUrls := appURLs{
-		baseUrl: options.AppBaseUrl,
+		baseUrl: configuration.AppBaseUrl,
 	}
 
 	rootEngine.GET(
@@ -123,7 +118,7 @@ func createWsgwRequestHandler(options config.Config, createConnectionId func() C
 		connectHandler(
 			&appUrls,
 			wsConns,
-			options.LoadBalancerAddress,
+			configuration.LoadBalancerAddress,
 			createConnectionId,
 			clusterSupport,
 		),

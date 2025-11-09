@@ -219,7 +219,7 @@ func (s *clusterSupportTestSuite) testSendReceiveMessagesFromApp(ctx context.Con
 }
 
 func (s *clusterSupportTestSuite) TestSendReceiveMessagesFromApp() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "TestSendReceiveMessagesFromApp").Logger()
+	logger := zerolog.Ctx(s.ctx).With().Str(logging.MethodLogger, "TestSendReceiveMessagesFromApp").Logger()
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
@@ -233,7 +233,7 @@ func (s *clusterSupportTestSuite) TestSendReceiveMessagesFromApp() {
 }
 
 func (s *clusterSupportTestSuite) TestSendReceiveMessagesFromAppMultiClients() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "TestSendReceiveMessagesFromApp").Logger()
+	logger := zerolog.Ctx(s.ctx).With().Str(logging.MethodLogger, "TestSendReceiveMessagesFromApp").Logger()
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
