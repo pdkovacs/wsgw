@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	wsgw "wsgw/internal"
+	"wsgw/internal/logging"
 	"wsgw/test/mockapp"
 
 	"github.com/coder/websocket"
@@ -76,7 +77,7 @@ func (c *Client) connect(ctx context.Context, connectOptions ...*websocket.DialO
 	c.connectionId = connId
 
 	go func() {
-		readFromAppLogger := zerolog.Ctx(ctx).With().Str("method", "readFromApp").Logger()
+		readFromAppLogger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "readFromApp").Logger()
 		for {
 			msgType, msgFromApp, readErr := conn.Read(ctx)
 			if readErr != nil {

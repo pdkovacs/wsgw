@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"wsgw/internal/logging"
 
 	"github.com/rs/zerolog"
 )
@@ -15,7 +16,7 @@ type InmemoryConntracker struct {
 }
 
 func (conntracker *InmemoryConntracker) AddConnection(ctx context.Context, userId string, connId string) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "InmemoryConntracker").Str("method", "AddConnectionId").Str("userId", userId).Str("connId", connId).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "InmemoryConntracker").Str(logging.MethodLogger, "AddConnectionId").Str("userId", userId).Str("connId", connId).Logger()
 	logger.Debug().Msg("BEGIN")
 	conntracker.mx.Lock()
 	defer conntracker.mx.Unlock()

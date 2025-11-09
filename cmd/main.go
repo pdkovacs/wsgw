@@ -6,14 +6,26 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 	wsgw "wsgw/internal"
 	"wsgw/internal/config"
 	"wsgw/internal/logging"
 )
 
 func main() {
-	logger := logging.Get().With().Str("root", "main").Logger()
-	ctx := logger.WithContext(context.Background())
+	ctx, cancelRequests := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+		syscall.SIGURG)
+	defer cancelRequests()
+
+	logger := logging.Get().With().Str(logging.UnitLogger, "main").Logger()
+	ctx = logger.WithContext(ctx)
 
 	var serverWanted bool = true
 
@@ -27,38 +39,40 @@ func main() {
 	if serverWanted {
 		conf := config.GetConfig(os.Args)
 
-		var stopServer func()
-		exitc := make(chan struct{})
+		var shutdownServer func() error
 
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc,
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT)
-		go func() {
-			s := <-sigc
-			fmt.Fprintf(os.Stderr, "Caught %v, stopping server...\n", s)
-			stopServer()
-			fmt.Fprintln(os.Stderr, "Server stopped")
-			exitc <- struct{}{}
-		}()
-
-		app := wsgw.NewServer(
-			ctx,
-			conf,
-			func() wsgw.ConnectionID {
-				return wsgw.CreateID(ctx)
-			},
-		)
-		errAppStart := app.SetupAndStart(func(port int, stop func()) {
-			stopServer = stop
-		})
-		if errAppStart != nil {
-			panic(errAppStart)
+		srvErrChan := make(chan error, 1)
+		ready := func(readyCtx context.Context, port int, stop func(stopCtx context.Context) error) {
+			shutdownServer = func() error {
+				cancelRequests()
+				return stop(readyCtx)
+			}
 		}
 
-		<-exitc
-		fmt.Fprintln(os.Stderr, "Exiting...")
+		app := wsgw.NewServer(
+			conf,
+			func(creConnIdCtx context.Context) wsgw.ConnectionID {
+				return wsgw.CreateID(creConnIdCtx)
+			},
+		)
+		go func() {
+			errAppStart := app.SetupAndStart(ctx, conf, ready)
+			srvErrChan <- errAppStart
+		}()
+
+		<-ctx.Done()
+		logger.Info().Msg("server context canceled")
+
+		shutdownErr := shutdownServer()
+		logger.Info().Msgf("server shut down with %v\n", shutdownErr)
+
+		select {
+		case srvErr := <-srvErrChan:
+			logger.Info().Msgf("server exited with error: %v\n", srvErr)
+		case <-time.After(time.Second * 20):
+			logger.Info().Msgf("server didn't shutdown within 20 seconds\n")
+		}
+
+		logger.Info().Msg("Exiting...")
 	}
 }

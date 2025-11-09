@@ -33,3 +33,13 @@ Service taking care of the management (and use) of stateful web-socket connectio
 * `POST /ws/message`
 
   The gateway relays to this end-point messages it receives from clients
+
+# Operation
+
+## Logging
+
+Sample LogQL:
+
+```
+{filename="/mnt/workspace/logs/e2e-app"} | json | line_format `{{.time}} [{{.method}}] {{.message}} {{.req_url}}`
+```

@@ -193,7 +193,7 @@ func (s *sendMessageTestSuite) testSendReceiveMessagesFromApp(ctx context.Contex
 }
 
 func (s *sendMessageTestSuite) TestSendReceiveMessagesFromAppSingleClientOneOff() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "TestSendReceiveMessagesFromApp").Logger()
+	logger := zerolog.Ctx(s.ctx).With().Str(logging.MethodLogger, "TestSendReceiveMessagesFromApp").Logger()
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
@@ -207,7 +207,7 @@ func (s *sendMessageTestSuite) TestSendReceiveMessagesFromAppSingleClientOneOff(
 }
 
 func (s *sendMessageTestSuite) TestSendReceiveMessagesFromAppSingleClientInParallel() {
-	logger := zerolog.Ctx(s.ctx).With().Str("method", "TestSendReceiveMessagesFromApp").Logger()
+	logger := zerolog.Ctx(s.ctx).With().Str(logging.MethodLogger, "TestSendReceiveMessagesFromApp").Logger()
 	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 

@@ -8,10 +8,10 @@ unset stopping
 
 kill_app() {
   if [ -n "$app_pid" ]; then
-    kill -9 $app_pid && echo "killed app with pid $app_pid"
+    kill -s SIGTERM $app_pid && echo "killed app with pid $app_pid" || echo "couldn't kill app with pid $app_pid"
   fi
   if [ -n "$tail_pid" ]; then
-    kill -9 $tail_pid && echo "killed tail with pid $tail_pid"
+    kill -s SIGTERM $tail_pid && echo "killed tail with pid $tail_pid" || echo "couldn't kill app with pid $app_pid"
   fi
 }
 
@@ -19,7 +19,7 @@ cleanup() {
   stopping=true
   kill_app
   if [ -n "$fswatch_pid" ]; then
-    if kill -9 $fswatch_pid; then
+    if kill -s SIGTERM $fswatch_pid; then
       echo "killed fswatch with pid $fswatch_pid";
       rm $fswatch_pid_file
     fi

@@ -11,7 +11,3 @@ func (client *MockAppClient) StartApp() error {
 func (client *MockAppClient) GetAppAddress() string {
 	return client.inprocessApp.listener.Addr().String()
 }
-
-func (client *MockAppClient) StopApp() {
-	client.inprocessApp.stop()
-}
