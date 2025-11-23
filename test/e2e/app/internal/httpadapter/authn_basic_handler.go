@@ -36,7 +36,7 @@ func decodeBasicAuthnHeaderValue(headerValue string) (userid string, password st
 	return pair[0], pair[1], true
 }
 
-func checkBasicAuthentication(options basicConfig, userService services.UserService) func(c *gin.Context) {
+func checkBasicAuthentication(conf basicConfig, userService services.UserService) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		logger := zerolog.Ctx(c.Request.Context()).With().Str(logging.UnitLogger, "basic authn handler").Logger()
 		authenticated := false
@@ -55,8 +55,8 @@ func checkBasicAuthentication(options basicConfig, userService services.UserServ
 				logger.Debug().Bool("headerCouldBeDecoded", decodeOK).Send()
 				if decodeOK {
 					logger.Debug().Str("username", username).Send()
-					logger.Debug().Int("passwordCredentialsListLength", len(options.PasswordCredentialsList)).Send()
-					for _, pc := range options.PasswordCredentialsList {
+					logger.Debug().Int("passwordCredentialsListLength", len(conf.PasswordCredentialsList)).Send()
+					for _, pc := range conf.PasswordCredentialsList {
 						logger.Debug().Str("currentUserName", pc.Username).Send()
 						if pc.Username == username && pc.Password == password {
 							logger.Debug().Msg("password matches")
@@ -87,8 +87,8 @@ func checkBasicAuthentication(options basicConfig, userService services.UserServ
 	}
 }
 
-func basicScheme(options basicConfig, userService *services.UserService) gin.HandlerFunc {
+func basicScheme(conf basicConfig, userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		checkBasicAuthentication(options, *userService)(c)
+		checkBasicAuthentication(conf, *userService)(c)
 	}
 }

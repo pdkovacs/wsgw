@@ -15,7 +15,7 @@ type DbConnectionProperties struct {
 	Password string
 }
 
-func CreateDbProperties(options Options, logger zerolog.Logger) DbConnectionProperties {
+func CreateDbProperties(conf Config, logger zerolog.Logger) DbConnectionProperties {
 	checkDefined := func(value string, name string) {
 		if value == "" {
 			logger.Error().Str("prop_name", name).Msg("undefined connection property")
@@ -23,19 +23,19 @@ func CreateDbProperties(options Options, logger zerolog.Logger) DbConnectionProp
 		}
 	}
 
-	checkDefined(options.DBHost, "DBHost")
-	checkDefined(options.DBName, "DBName")
-	if options.DBPort == 0 {
+	checkDefined(conf.DBHost, "DBHost")
+	checkDefined(conf.DBName, "DBName")
+	if conf.DBPort == 0 {
 		checkDefined("", "DBPort")
 	}
-	checkDefined(options.DBUser, "DBUser")
-	checkDefined(options.DBPassword, "DBPassword")
+	checkDefined(conf.DBUser, "DBUser")
+	checkDefined(conf.DBPassword, "DBPassword")
 
 	return DbConnectionProperties{
-		Host:     options.DBHost,
-		Port:     options.DBPort,
-		Database: options.DBName,
-		User:     options.DBUser,
-		Password: options.DBPassword,
+		Host:     conf.DBHost,
+		Port:     conf.DBPort,
+		Database: conf.DBName,
+		User:     conf.DBUser,
+		Password: conf.DBPassword,
 	}
 }

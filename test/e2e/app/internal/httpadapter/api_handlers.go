@@ -17,7 +17,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func messageHandler(wsgwUrl string, wsConnections conntrack.WsConnections) func(g *gin.Context) {
+type APIHandler struct {
+	wsgwUrl       string
+	wsConnections conntrack.WsConnections
+	metrics       *apiHandlerMetrics
+}
+
+func newAPIHandler(
+	wsgwUrl string,
+	wsConnections conntrack.WsConnections,
+) *APIHandler {
+	return &APIHandler{
+		wsgwUrl:       wsgwUrl,
+		wsConnections: wsConnections,
+		metrics:       newAPIHandlerMetrics(),
+	}
+}
+
+func (h *APIHandler) messageHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS connect handler").Logger()
 
@@ -57,7 +74,7 @@ func messageHandler(wsgwUrl string, wsConnections conntrack.WsConnections) func(
 						break
 					}
 					logger.Debug().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("working")
-					status, err = sendMessageToUserDevices(g.Request.Context(), wsgwUrl, wsConnections, messageIn.What, userId)
+					status, err = h.sendMessageToUserDevices(g.Request.Context(), messageIn.What, userId)
 				case <-g.Request.Context().Done():
 					logger.Info().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("ctx timeout")
 					keepOn = false
@@ -87,13 +104,13 @@ func messageHandler(wsgwUrl string, wsConnections conntrack.WsConnections) func(
 	}
 }
 
-func sendMessageToUserDevices(ctx context.Context, wsgwUrl string, wsConnections conntrack.WsConnections, message string, userId string) (int, error) {
+func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message string, userId string) (int, error) {
 	var status int
 	var err error
 
 	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "sendMessageToUserDevices").Str("userId", userId).Logger()
 
-	wsConnIds, getConnErr := wsConnections.GetConnections(ctx, userId)
+	wsConnIds, getConnErr := h.wsConnections.GetConnections(ctx, userId)
 	if getConnErr != nil {
 		logger.Error().Err(getConnErr).Msg("failed to get wsgw connection-ids for user")
 		status = http.StatusInternalServerError
@@ -106,9 +123,11 @@ func sendMessageToUserDevices(ctx context.Context, wsgwUrl string, wsConnections
 		return status, err
 	}
 
-	errProcessMessage := services.SendMessage(ctx, wsgwUrl, userId, message, wsConnIds, func(connId string) {
-		wsConnections.RemoveConnection(ctx, userId, connId)
-	})
+	deleteConnId := func(connId string) {
+		h.wsConnections.RemoveConnection(ctx, userId, connId)
+		h.metrics.staleWsConnIdCounter.Add(ctx, 1)
+	}
+	errProcessMessage := services.SendMessage(ctx, h.wsgwUrl, userId, message, wsConnIds, deleteConnId)
 
 	if errProcessMessage != nil {
 		logger.Error().Err(errProcessMessage).Msg("failed to process message")

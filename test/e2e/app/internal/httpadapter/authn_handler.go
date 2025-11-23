@@ -16,13 +16,13 @@ type SessionData struct {
 	UserInfo authn.UserInfo
 }
 
-func authenticationCheck(options config.Options, userService *services.UserService) gin.HandlerFunc {
-	return checkBasicAuthentication(basicConfig{PasswordCredentialsList: options.PasswordCredentials}, *userService)
+func authenticationCheck(conf config.Config, userService *services.UserService) gin.HandlerFunc {
+	return checkBasicAuthentication(basicConfig{PasswordCredentialsList: conf.PasswordCredentials}, *userService)
 }
 
 // authentication handles authentication
-func authentication(options config.Options, userService *services.UserService, log zerolog.Logger) gin.HandlerFunc {
+func authentication(conf config.Config, userService *services.UserService, log zerolog.Logger) gin.HandlerFunc {
 	logger := log.With().Str(logging.FunctionLogger, "authentication").Logger()
 	logger.Debug().Msg("Setting up basic authentication framework")
-	return basicScheme(basicConfig{PasswordCredentialsList: options.PasswordCredentials}, userService)
+	return basicScheme(basicConfig{PasswordCredentialsList: conf.PasswordCredentials}, userService)
 }

@@ -6,7 +6,7 @@ import (
 	"wsgw/test/e2e/app/internal/httpadapter"
 )
 
-func Start(serverCtx context.Context, conf config.Options, getwsgw func() string, ready func(port int, stop func() error)) error {
+func Start(serverCtx context.Context, conf config.Config, getwsgw func() string, ready func(port int, stop func() error)) error {
 	server := httpadapter.NewServer(
 		getwsgw,
 	)

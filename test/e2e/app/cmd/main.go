@@ -10,6 +10,7 @@ import (
 	"wsgw/internal/logging"
 	app "wsgw/test/e2e/app/internal"
 	"wsgw/test/e2e/app/internal/config"
+	"wsgw/test/e2e/app/internal/monitoring"
 
 	"github.com/rs/zerolog"
 )
@@ -23,18 +24,20 @@ func main() {
 		context.Background(),
 		os.Interrupt,
 		syscall.SIGHUP,
-		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
-		syscall.SIGURG)
+	)
 	defer cancelRequests()
 
 	logger := logging.Get().Level(zerolog.GlobalLevel()).With().Str(logging.UnitLogger, "main").Logger()
 	logger.Info().Msg("Test application instance starting...")
 	ctx = logger.WithContext(ctx)
 
-	conf := config.ParseCommandLineArgs(os.Args)
+	conf := config.GetConfig(os.Args)
+	logger.Info().Any("parsed config", conf).Send()
+
+	monitoring.InitOtel(ctx, conf)
 
 	var shutdownServer func() error
 

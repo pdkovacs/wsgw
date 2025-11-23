@@ -46,7 +46,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message str
 		if response.StatusCode != http.StatusNoContent {
 			if response.StatusCode == http.StatusNotFound {
 				discardConnId(connId)
-				logger.Info().Str("connId", connId).Msg("404: discarding ws connection reference")
+				logger.Debug().Str("connId", connId).Msg("404: discarding ws connection reference")
 				continue
 			}
 

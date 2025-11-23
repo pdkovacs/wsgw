@@ -21,7 +21,7 @@ func main() {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
-		syscall.SIGURG)
+	)
 	defer cancelRequests()
 
 	logger := logging.Get().With().Str(logging.UnitLogger, "main").Logger()

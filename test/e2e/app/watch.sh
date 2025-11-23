@@ -30,9 +30,9 @@ trap cleanup EXIT
 
 build_and_run() {
   if task build; then
-    ./cmd/app --password-credentials "${PASSWORD_CREDENTIALS}" >"$DEV_LOG_FILE" 2>"$DEV_LOG_FILE" &
+    ./cmd/app >"$E2EAPP_DEV_LOG_FILE" 2>"$E2EAPP_DEV_LOG_FILE" &
     app_pid=$!
-    tail -f "${DEV_LOG_FILE}" &
+    tail -f "${E2EAPP_DEV_LOG_FILE}" &
     tail_pid=$!
   fi
 }

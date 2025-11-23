@@ -19,7 +19,7 @@ tasks:
       - task: buildinfo
       - |
         cd ./cmd
-        GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app main.go
+        GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app ./...
   build-with-ui:
     cmds:
       - task: build-ui
@@ -48,12 +48,17 @@ tasks:
         pwcreds="${pwcreds}]"
         echo "pwcreds: $pwcreds"
 
-        export SERVER_PORT=45678
-        export PASSWORD_CREDENTIALS="$pwcreds"
-        export WSGW_HOST=localhost
-        export WSGW_PORT=45679
-        export LOG_LEVEL=debug
-        export DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
+        export E2EAPP_SERVER_PORT=45678
+        export E2EAPP_PASSWORD_CREDENTIALS="$pwcreds"
+        export E2EAPP_WSGW_HOST=localhost
+        export E2EAPP_WSGW_PORT=45679
+        export E2EAPP_LOG_LEVEL=debug
+        export E2EAPP_DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
+
+        export E2EAPP_OTLP_ENDPOINT="http://localhost:4318"
+        export E2EAPP_OTLP_SERVICE_NAMESPACE="wsgw"
+        export E2EAPP_OTLP_SERVICE_NAME="e2eapp"
+        export E2EAPP_OTLP_SERVICE_INSTANCE_ID="started-by-watch"
 
         ./watch.sh
   run:
@@ -74,13 +79,11 @@ tasks:
         pwcreds="${pwcreds}]"
         echo "pwcreds: $pwcreds"
 
-        export SERVER_PORT=45678
-        export PASSWORD_CREDENTIALS="$pwcreds"
-        export WSGW_HOST=localhost
-        export WSGW_PORT=45679
-        export LOG_LEVEL=debug
-        export DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
+        export E2EAPP_SERVER_PORT=45678
+        export E2EAPP_PASSWORD_CREDENTIALS="$pwcreds"
+        export E2EAPP_E2EAPP_WSGW_HOST=localhost
+        export E2EAPP_E2EAPP_WSGW_PORT=45679
+        export E2EAPP_E2EAPP_LOG_LEVEL=debug
+        export E2EAPP_E2EAPP_DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
 
-        ./cmd/app \
-          --password-credentials "$(pwcreds)" 2>&1 |
-          tee {{.DEV_LOG_FILE}}
+        ./cmd/app | tee {{.DEV_LOG_FILE}}

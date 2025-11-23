@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/internal/logging"
@@ -46,9 +47,9 @@ func NewServer(getwsgw func() string) server {
 }
 
 // SetupAndStart sets up and starts server.
-func (s *server) Start(serverCtx context.Context, options config.Options, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
-	r := s.initEndpoints(serverCtx, options)
-	return s.start(serverCtx, options.ServerPort, r, ready)
+func (s *server) Start(serverCtx context.Context, conf config.Config, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+	r := s.initEndpoints(serverCtx, conf)
+	return s.start(serverCtx, conf.ServerPort, r, ready)
 }
 
 // Stop kills the listener
@@ -69,11 +70,11 @@ func (s *server) Stop(ctx context.Context) error {
 	return shutdownErr
 }
 
-func (s *server) initEndpoints(ctx context.Context, options config.Options) *gin.Engine {
+func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Engine {
 	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
 	userService := services.NewUserService()
 
-	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(options.DynamodbURL)
+	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(conf.DynamodbURL)
 	if conntrackerErr != nil {
 		panic(fmt.Errorf("unable to create WSGW connection tracker %w", conntrackerErr))
 	}
@@ -82,17 +83,22 @@ func (s *server) initEndpoints(ctx context.Context, options config.Options) *gin
 	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
 
 	gob.Register(SessionData{})
-	connProps := config.CreateDbProperties(options, logger)
-	connProps.Database = options.SessionDbName
-	store, createStoreErr := s.createSessionStore(ctx, connProps)
-	if createStoreErr != nil {
-		panic(createStoreErr)
+
+	var connProps config.DbConnectionProperties
+	if len(conf.DBHost) > 0 {
+		connProps = config.CreateDbProperties(conf, logger)
 	}
-	store.Options(sessions.Options{MaxAge: options.SessionMaxAge})
+
+	var err error
+	var store sessions.Store
+	if store, err = s.createSessionStore(ctx, connProps, conf.SessionDB); err != nil {
+		panic(fmt.Sprintf("failed to create session store: %v", err))
+	}
+	store.Options(sessions.Options{MaxAge: conf.SessionMaxAge})
 
 	rootEngine.Use(sessions.Sessions("mysession", store))
 
-	rootEngine.NoRoute(authentication(options, &userService, zerolog.Ctx(ctx).With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
+	rootEngine.NoRoute(authentication(conf, &userService, zerolog.Ctx(ctx).With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, config.GetBuildInfo())
@@ -102,16 +108,17 @@ func (s *server) initEndpoints(ctx context.Context, options config.Options) *gin
 
 	authorizedGroup := rootEngine.Group("/")
 	{
-		authorizedGroup.Use(authenticationCheck(options, &userService))
+		authorizedGroup.Use(authenticationCheck(conf, &userService))
 
 		logger.Debug().Msg("Setting up logout handler")
 
-		authorizedGroup.GET("/config", configHandler(options.WsgwHost, options.WsgwPort))
+		authorizedGroup.GET("/config", configHandler(conf.WsgwHost, conf.WsgwPort))
 		authorizedGroup.GET("/user", userInfoHandler(userService))
-		authorizedGroup.GET("/users", userListHandler(userService, options.PasswordCredentials))
+		authorizedGroup.GET("/users", userListHandler(userService, conf.PasswordCredentials))
 
+		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections)
 		apiGroup := authorizedGroup.Group("/api")
-		apiGroup.POST("/message", messageHandler(fmt.Sprintf("http://%s:%d", options.WsgwHost, options.WsgwPort), wsConnections))
+		apiGroup.POST("/message", apiHandler.messageHandler())
 
 		wsGroup := authorizedGroup.Group("/ws")
 		wsGroup.GET(string(wsgw.ConnectPath), connectWsHandler(wsConnections))
@@ -133,46 +140,53 @@ func (s *server) initEndpoints(ctx context.Context, options config.Options) *gin
 	return rootEngine
 }
 
-func (s *server) createSessionStore(ctx context.Context, connProps config.DbConnectionProperties) (sessions.Store, error) {
+func (s *server) createSessionStore(ctx context.Context, connProps config.DbConnectionProperties, sessionDb string) (sessions.Store, error) {
 	var store sessions.Store
 	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "create-session properties").Logger()
 
-	if connProps.Database == "" {
+	// I feel that we should have some implemenetation  connection URI for every (even app-specific for databases which don't have a widely available scheme)
+	connScheme := strings.Split(sessionDb, ":")[0]
+	switch connScheme {
+	case "":
 		logger.Info().Msg("Using in-memory session store")
-		store = memstore.NewStore([]byte("secret"))
-	} else if len(connProps.Host) > 0 {
-		logger.Info().Interface("sessionStore", connProps).Send()
-		connStr := fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-			connProps.User,
-			connProps.Password,
-			connProps.Host,
-			connProps.Port,
-			connProps.Database,
-		)
-		sessionDb, openSessionDbErr := sql.Open("pgx", connStr)
-		if openSessionDbErr != nil {
-			return store, openSessionDbErr
-		}
-		sessionDb.Ping()
-		var createDbSessionStoreErr error
-		store, createDbSessionStoreErr = postgres.NewStore(sessionDb, []byte("secret"))
-		if createDbSessionStoreErr != nil {
-			return store, createDbSessionStoreErr
+		return memstore.NewStore([]byte("secret")), nil
+	case "dynamodb":
+		return nil, fmt.Errorf("unsupported session-db scheme: %s", connScheme)
+	default:
+		if len(connProps.Host) > 0 {
+			connProps.Database = sessionDb
+			logger.Info().Interface("sessionStore", connProps).Send()
+			connStr := fmt.Sprintf(
+				"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+				connProps.User,
+				connProps.Password,
+				connProps.Host,
+				connProps.Port,
+				connProps.Database,
+			)
+			sessionDb, openSessionDbErr := sql.Open("pgx", connStr)
+			if openSessionDbErr != nil {
+				return store, openSessionDbErr
+			}
+			sessionDb.Ping()
+			var createDbSessionStoreErr error
+			store, createDbSessionStoreErr = postgres.NewStore(sessionDb, []byte("secret"))
+			if createDbSessionStoreErr != nil {
+				return store, createDbSessionStoreErr
+			}
 		}
 	}
-
 	return store, nil
 }
 
 // start starts the service
 func (s *server) start(serverCtx context.Context, portRequested int, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
 	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "StartServer").Logger()
-	logger.Info().Msg("Starting server on ephemeral....")
+	logger.Info().Msg("Starting listener....")
 
 	lstnr, lstnrErr := net.Listen("tcp", fmt.Sprintf(":%d", portRequested))
 	if lstnrErr != nil {
-		panic(fmt.Sprintf("Error while starting to listen at an ephemeral port: %v", lstnrErr))
+		panic(fmt.Sprintf("Error while starting listener at port: %v", lstnrErr))
 	}
 
 	_, port, err := net.SplitHostPort(lstnr.Addr().String())
