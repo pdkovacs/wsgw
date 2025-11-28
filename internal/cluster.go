@@ -97,9 +97,9 @@ func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId Co
 	}
 	logger = logger.With().Str("connOwnerIpAddress", connOwnerIpAddress).Logger()
 
-	protocol := os.Getenv("MY_INSTANCE_PROTOCOL")
+	protocol := os.Getenv("WSGW_INSTANCE_PROTOCOL")
 	if len(protocol) == 0 {
-		errMsg := "MY_INSTANCE_PROTOCOL is not set"
+		errMsg := "WSGW_INSTANCE_PROTOCOL is not set"
 		logger.Error().Msg(errMsg)
 		return fmt.Errorf("%s", errMsg)
 	}
@@ -134,7 +134,7 @@ func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId Co
 }
 
 func getMyIPAddress() (string, error) {
-	myIpAddress := os.Getenv("MY_INSTANCE_IPADDRESS")
+	myIpAddress := os.Getenv("WSGW_INSTANCE_IPADDRESS")
 	if len(myIpAddress) == 0 {
 		return "", fmt.Errorf("connection registration error: no IP address to register")
 	}
@@ -142,9 +142,9 @@ func getMyIPAddress() (string, error) {
 }
 
 func getInstancePort() (string, error) {
-	port := os.Getenv("MY_INSTANCE_PORT")
+	port := os.Getenv("WSGW_INSTANCE_PORT")
 	if len(port) == 0 {
-		errMsg := "MY_INSTANCE_PORT is not set"
+		errMsg := "WSGW_INSTANCE_PORT is not set"
 		return "", fmt.Errorf("%s", errMsg)
 	}
 	return port, nil

@@ -1,0 +1,29 @@
+version: "3"
+
+tasks:
+  k8s-userdb:
+    cmds:
+      - |
+        password_base=crixcrax
+        nr_users=3
+        mkdir -p $(dirname {{.DEV_LOG_FILE}})
+
+        pwcreds="["
+        for nummer in $(seq 1 30); do
+          if test $nummer -gt 1; then
+            pwcreds="${pwcreds},"
+          fi
+          pwcreds="${pwcreds}{\"username\":\"user${nummer}\",\"password\":\"${password_base}${nummer}\"}"
+        done
+        pwcreds="${pwcreds}]"
+        echo "pwcreds: $pwcreds"
+
+        if ! kubectl get secrets wsgw-e2e-app-users > /dev/null;
+        then
+          kubectl create secret generic wsgw-e2e-app-users "--from-literal=PASSWORD_CREDENTIALS=$pwcreds"
+        fi
+  k8s:
+    cmds:
+      - task: k8s-userdb
+      - |
+        kubectl apply -f ./k8s/app/e2e-app.yaml

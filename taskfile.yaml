@@ -6,11 +6,10 @@ includes:
     dir: ./test/e2e
 
 env:
-  TARGETING_MINIKUBE: '{{.TARGETING_MINIKUBE | default "yes"}}'
   IMAGE_REPO: wsgw
 
 vars:
-  APP: wsgw
+  APP: ./cmd/wsgw
   GOOS: linux
   GOARCH: amd64
   WSGW_LOG_FILE: '{{.WSGW_LOG_FILE | default "$HOME/workspace/logs/wsgw" }}'
@@ -43,9 +42,9 @@ tasks:
         cd cmd
         env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.APP}}
     sources:
-      - cmd/**/*
-      - internal/**/*
-      - taskfile.yaml
+      - ./cmd/**/*
+      - ./internal/**/*
+      - ./taskfile.yaml
     generates:
       - "{{.APP}}"
   watch:
@@ -58,22 +57,24 @@ tasks:
         export WSGW_LOAD_BALANCER_ADDRESS=localhost:5173
         export LOG_LEVEL=debug
         ./watch.sh
-  docker:
+  image:
     cmds:
       - task: build
       - cp {{.APP}} deploy/docker/
       - |
-        if [[ "{{.TARGETING_MINIKUBE}}" = "yes" ]];
+        if which minikube && minikube status;
         then
-          echo "Targeting minikube..."
           eval $(minikube -p minikube docker-env)
         fi
         docker build -t wsgw:latest deploy/docker/
+  k8s:
+    cmds:
+      - task: image
+      - kubectl apply -f deploy/k8s/wsgw-deployment.yaml
+      - kubectl apply -f deploy/k8s/wsgw-service.yaml
   cluster:
     cmds:
-      - task: docker
+      - task: image
       - kubectl apply -f deploy/k8s/redis-config.yaml
       - kubectl apply -f deploy/k8s/redis-deployment.yaml
       - kubectl apply -f deploy/k8s/redis-service.yaml
-      - kubectl apply -f deploy/k8s/wsgw-deployment.yaml
-      - kubectl apply -f deploy/k8s/wsgw-service.yaml

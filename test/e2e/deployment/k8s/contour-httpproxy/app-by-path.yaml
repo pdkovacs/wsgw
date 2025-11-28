@@ -1,0 +1,32 @@
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: wsgw-e2e-by-path
+  namespace: default
+spec:
+  virtualhost:
+    fqdn: wsgw-e2e-app.internal
+  routes:
+    - conditions:
+        - prefix: /
+      services:
+        - name: wsgw-e2e-app
+          port: 8080
+      timeoutPolicy:
+        response: 1h
+    - conditions:
+        - prefix: /ws
+      enableWebsockets: true
+      services:
+        - name: wsgw
+          port: 8080
+      pathRewritePolicy:
+        replacePrefix:
+          - prefix: /ws
+            replacement: /
+      cookieRewritePolicies: # We're not directing to REWRITE here actually, we're directing NOT to REWRITE
+        - name: mysession
+          pathRewrite:
+            value: /
+      timeoutPolicy:
+        response: 1h

@@ -62,7 +62,7 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 	if err != nil {
 		panic(fmt.Sprintf("Error while starting to listen at: %s", endpoint))
 	}
-	logger.Info().Msgf("test application instance is listening at %s", listener.Addr().String())
+	logger.Info().Msgf("wsgw instance is listening at %s", listener.Addr().String())
 
 	_, port, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil {

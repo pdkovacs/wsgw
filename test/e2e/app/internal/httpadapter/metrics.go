@@ -8,14 +8,34 @@ import (
 )
 
 type apiHandlerMetrics struct {
-	staleWsConnIdCounter metric_api.Int64Counter
+	messageRequestCounter metric_api.Int64Counter
+	staleWsConnIdCounter  metric_api.Int64Counter
 }
 
 func newAPIHandlerMetrics() *apiHandlerMetrics {
-	meter := otel.Meter(monitoring.OtelScope)
-	staleWsConnIdCounter, regErr := meter.Int64Counter(
+
+	messageRequestCounter := createCounter(
+		"message.api.request.counter",
+		"Number of message sending request via api",
+	)
+
+	staleWsConnIdCounter := createCounter(
 		"stale.wsconnid.counter",
-		metric_api.WithDescription("Number of stale websocket connection-ids encountered"),
+		"Number of stale websocket connection-ids encountered",
+	)
+
+	return &apiHandlerMetrics{
+		messageRequestCounter: messageRequestCounter,
+		staleWsConnIdCounter:  staleWsConnIdCounter,
+	}
+}
+
+func createCounter(name string, description string) metric_api.Int64Counter {
+	meter := otel.Meter(monitoring.OtelScope)
+
+	counter, regErr := meter.Int64Counter(
+		name,
+		metric_api.WithDescription(description),
 		metric_api.WithUnit("{call}"),
 	)
 
@@ -23,7 +43,5 @@ func newAPIHandlerMetrics() *apiHandlerMetrics {
 		panic(regErr)
 	}
 
-	return &apiHandlerMetrics{
-		staleWsConnIdCounter,
-	}
+	return counter
 }

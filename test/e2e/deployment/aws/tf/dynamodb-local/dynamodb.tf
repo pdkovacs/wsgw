@@ -1,5 +1,5 @@
 locals {
-  dynamodb_url = "http://10.107.197.135:8000"
+  dynamodb_url = "http://dynamodb-k8s:8000"
 }
 
 provider "aws" {
@@ -15,8 +15,8 @@ provider "aws" {
   }
 }
 
-resource "aws_dynamodb_table" "WsConnections" {
-  name           = "WsConnections"
+resource "aws_dynamodb_table" "WsgwConnectionIds" {
+  name           = "WsgwConnectionIds"
   billing_mode   = "PROVISIONED"
   read_capacity  = 5
   write_capacity = 5

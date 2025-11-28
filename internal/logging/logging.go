@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+	"wsgw/internal/config"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
@@ -77,6 +78,7 @@ func Get() zerolog.Logger {
 			Level(zerolog.Level(logLevel)).
 			With().
 			Timestamp().
+			Str("instanceId", config.GetInstanceId()).
 			Str("git_revision", gitRevision).
 			Str("go_version", buildInfo.GoVersion).
 			Str("app_xid", xid.New().String())

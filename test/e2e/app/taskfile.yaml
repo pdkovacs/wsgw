@@ -2,7 +2,6 @@ version: "3"
 
 vars:
   DEV_LOG_FILE: '{{.DEV_LOG_FILE | default "$HOME/workspace/logs/e2e-app" }}'
-  UI_DIST: ../web/dist
   GOOS: linux
   GOARCH: amd64
 
@@ -20,12 +19,6 @@ tasks:
       - |
         cd ./cmd
         GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app ./...
-  build-with-ui:
-    cmds:
-      - task: build-ui
-      - rm -rf "{{.UI_DIST}}" || echo "No files to remove in {{.UI_DIST}}"
-      - cp -r {{.UI_DIST}} {{.UI_DIST}}
-      - task: build
   watch:
     cmds:
       - |
