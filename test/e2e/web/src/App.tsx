@@ -9,11 +9,9 @@ import { Msg } from "./features/msg/Msg";
 import { isNil } from "lodash-es";
 import axios from "axios";
 import { AsyncValueStatus } from "./slice-utils";
-import { getConfig, selectConfiguration } from "./features/config/configSlice";
 import { dial } from "./notifications";
 
 const App = () => {
-	const configuration = useAppSelector(selectConfiguration);
 	const userInfo = useAppSelector(selectUserInfo);
 
 	const userIsLoggedIn = userInfo.status === AsyncValueStatus.resolved;
@@ -21,7 +19,6 @@ const App = () => {
 	const dispatch = useAppDispatch();
 
 	useEffect(() => {
-		dispatch(getConfig());
 		dispatch(getUserInfo());
 		dispatch(getUserList());
 	}, [dispatch]);
@@ -31,17 +28,14 @@ const App = () => {
 			return;
 		}
 
-		if (configuration?.status === AsyncValueStatus.resolved && configuration.value && configuration.value?.wsgwHost.length > 0) {
-			const { wsgwHost, wsgwPort } = configuration.value;
-			dial(wsgwHost, wsgwPort, 0, (message, error) => {
-				if (error) {
-					console.error("Error in websocket connection", error);
-				} else {
-					console.info(">>>>>>>>> message received: ", message);
-				}
-			});
-		}
-	}, [configuration, userInfo]);
+		dial(0, (message, error) => {
+			if (error) {
+				console.error("Error in websocket connection", error);
+			} else {
+				console.info(">>>>>>>>> message received: ", message);
+			}
+		});
+	}, [userInfo]);
 
 	return (
 		<div className="App">

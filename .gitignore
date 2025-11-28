@@ -3,3 +3,4 @@ wsgw
 buildinfo.txt
 .vite/
 fswatch.pid
+wsgw-e2e-app

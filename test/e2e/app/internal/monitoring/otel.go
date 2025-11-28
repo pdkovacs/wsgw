@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"time"
 	"wsgw/internal/logging"
 	"wsgw/test/e2e/app/internal/config"
@@ -48,13 +47,7 @@ func InitOtel(ctx context.Context, conf config.Config) {
 	serviceComponent := "main"
 	serviceNamespace := conf.OtlpServiceNamespace
 	servcieName := conf.OtlpServiceName
-	serviceInstanceID := conf.OtlpServiceInstanceId
-	if len(serviceInstanceID) == 0 {
-		if serviceInstanceID, err = os.Hostname(); err != nil {
-			logger.Error().Err(err).Msg("failed to query hostname")
-			panic(fmt.Sprintf("failed to query hostname: %v\n", err))
-		}
-	}
+	serviceInstanceID := config.GetInstanceId()
 
 	// See also https://github.com/pdkovacs/forked-quickpizza/commit/a5835b3b84d4ae995b8b886a6982a59f3997af2e
 	res, _ := resource.Merge(

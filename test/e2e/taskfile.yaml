@@ -4,9 +4,14 @@ includes:
   app:
     taskfile: ./app/taskfile.yaml
     dir: ./app/
-
+  deploy:
+    taskfile: ./deployment/taskfile.yaml
+    dir: ./deployment
 env:
   IMAGE_REPO: wsgw
+
+vars:
+  UI_DIST: ./app/web/dist
 
 tasks:
   build-ui:
@@ -20,11 +25,34 @@ tasks:
       - |
         cd ./web
         npm run build
+  build-app:
+    cmds:
+      - rm -rf "{{.UI_DIST}}/{index.html,assets}" || echo "No files to remove in {{.UI_DIST}}"
+      - cp -r ./web/dist/* {{.UI_DIST}}/
+      - task: app:build
   build-client-device:
     cmds:
       - |
         cd ./client-device/cmd
         GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o client-device main.go
+  image:
+    cmds:
+      - task: build-ui
+      - task: build-app
+      - |
+        context_dir=./deployment/image
+        repo_name=bitkit/wsgw-e2e-app
+        cp ./app/cmd/app ./$context_dir/wsgw-e2e-app
+        docker build $context_dir -t $repo_name
+        if which minikube && minikube status;
+        then
+            eval "$(minikube docker-env)"
+        fi
+        docker build $context_dir -t $repo_name
+  k8s-deploy:
+    cmds:
+      - task: image
+      - task: deploy:k8s
   aws-deploy:
     cmds:
       - |

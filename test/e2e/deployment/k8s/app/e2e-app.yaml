@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wsgw-e2e-app
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wsgw-e2e-app
+  template:
+    metadata:
+      labels:
+        app: wsgw-e2e-app
+        service.type: application
+    spec:
+      containers:
+        - name: wsgw-e2e-app
+          image: bitkit/wsgw-e2e-app
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: debug
+            - name: E2EAPP_DYNAMODB_URL
+              value: http://dynamodb-local:8000
+            - name: AWS_ACCESS_KEY_ID
+              value: kalap
+            - name: AWS_SECRET_ACCESS_KEY
+              value: kabat
+            - name: E2EAPP_SERVER_PORT
+              value: "8080"
+            - name: E2EAPP_PASSWORD_CREDENTIALS
+              valueFrom:
+                secretKeyRef:
+                  name: wsgw-e2e-app-users
+                  key: PASSWORD_CREDENTIALS
+            - name: E2EAPP_WSGW_HOST
+              value: "wsgw"
+            - name: E2EAPP_WSGW_PORT
+              value: "8080"
+            - name: E2EAPP_DEV_LOG_FILE
+              value: "{{.DEV_LOG_FILE}}"
+            - name: E2EAPP_OTLP_ENDPOINT
+              value: http://alloy.my-grafana.svc.cluster.local:4318
+            - name: E2EAPP_OTLP_SERVICE_NAMESPACE
+              value: "bitkit/wsgw"
+            - name: E2EAPP_OTLP_SERVICE_NAME
+              value: "e2e-app"
+          resources:
+            requests:
+              memory: "30M"
+              cpu: "100m"
+            limits:
+              memory: "500M"
+              cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wsgw-e2e-app
+  namespace: default
+spec:
+  selector:
+    app: wsgw-e2e-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer

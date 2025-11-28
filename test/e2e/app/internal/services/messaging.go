@@ -18,7 +18,7 @@ type Message struct {
 }
 
 func SendMessage(ctx context.Context, wsgwUrl string, userId string, message string, wsConnIds []string, discardConnId func(connId string)) error {
-	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "ProcessMessage").Logger()
+	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "SendMessage").Logger()
 	logger0.Debug().Str("adressee", userId).Str("what", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
 
 	var err error
