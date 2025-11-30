@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/rs/zerolog"
 )

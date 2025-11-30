@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
+	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
@@ -101,7 +102,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	rootEngine.NoRoute(authentication(conf, &userService, zerolog.Ctx(ctx).With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
-		c.JSON(200, config.GetBuildInfo())
+		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))
 	})
 
 	logger.Debug().Msg("Creating authorized group....")
@@ -109,8 +110,6 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	authorizedGroup := rootEngine.Group("/")
 	{
 		authorizedGroup.Use(authenticationCheck(conf, &userService))
-
-		logger.Debug().Msg("Setting up logout handler")
 
 		authorizedGroup.GET("/config", configHandler(conf.WsgwHost, conf.WsgwPort))
 		authorizedGroup.GET("/user", userInfoHandler(userService))
@@ -124,7 +123,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 		wsHandler := newWSHandler(wsConnections)
 		wsGroup.GET(string(wsgw.ConnectPath), wsHandler.connectWsHandler(wsConnections))
 		wsGroup.POST(string(wsgw.DisonnectedPath), wsHandler.disconnectWsHandler(wsConnections))
-		wsGroup.POST(string(wsgw.MessagePath), messageWsHanlder())
+		wsGroup.POST(string(wsgw.MessagePath), messageWsHandler())
 
 		authorizedGroup.POST("/longrequest", func(g *gin.Context) {
 			reqCtx := g.Request.Context()

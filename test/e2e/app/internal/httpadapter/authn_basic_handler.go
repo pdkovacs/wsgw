@@ -3,7 +3,7 @@ package httpadapter
 import (
 	"encoding/base64"
 	"strings"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/services"
 
@@ -55,7 +55,7 @@ func checkBasicAuthentication(conf basicConfig, userService services.UserService
 				logger.Debug().Bool("headerCouldBeDecoded", decodeOK).Send()
 				if decodeOK {
 					logger.Debug().Str("username", username).Send()
-					logger.Debug().Int("passwordCredentialsListLength", len(conf.PasswordCredentialsList)).Send()
+					logger.Debug().Int("PasswordCredentialsListLength", len(conf.PasswordCredentialsList)).Send()
 					for _, pc := range conf.PasswordCredentialsList {
 						logger.Debug().Str("currentUserName", pc.Username).Send()
 						if pc.Username == username && pc.Password == password {

@@ -1,2 +1,0 @@
-export LOG_LEVEL=debug
-export APP_ENV=development

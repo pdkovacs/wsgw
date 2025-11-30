@@ -4,21 +4,42 @@ vars:
   DEV_LOG_FILE: '{{.DEV_LOG_FILE | default "$HOME/workspace/logs/e2e-app" }}'
   GOOS: linux
   GOARCH: amd64
+  WEB_DIST_SOURCE: ../web/dist
+  WEB_DIST_TARGET: ./web/dist
 
 tasks:
-  buildinfo:
+  version-data:
     cmds:
-      - echo VERSION=0.0.1 > internal/config/buildinfo.txt
-      - printf "TIME=" >> internal/config/buildinfo.txt
-      - date +%Y-%m-%dT%H:%M:%S%z >> internal/config/buildinfo.txt
-      - printf "COMMIT=" >> internal/config/buildinfo.txt
-      - git rev-parse HEAD >> internal/config/buildinfo.txt
-  build:
+      - echo "APPLICATION=WebSocket Gateway / End-to-end Test / Application" > internal/config/version_data.txt
+      - echo VERSION=0.0.1 >> internal/config/version_data.txt
+      - printf "TIME=" >> internal/config/version_data.txt
+      - date +%Y-%m-%dT%H:%M:%S%z >> internal/config/version_data.txt
+      - printf "COMMIT=" >> internal/config/version_data.txt
+      - git rev-parse HEAD >> internal/config/version_data.txt
+  app:
     cmds:
-      - task: buildinfo
+      - task: version-data
       - |
         cd ./cmd
         GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app ./...
+  with-web:
+    cmds:
+      - rm -rf "{{.WEB_DIST_TARGET}}/{index.html,assets}" || echo "No files to remove in {{.WEB_DIST_TARGET}}"
+      - cp -r {{.WEB_DIST_SOURCE}}/* {{.WEB_DIST_TARGET}}/
+      - task: plain
+  image:
+    cmds:
+      - task: app
+      - |
+        context_dir=./image
+        repo_name=bitkit/wsgw-e2e-app
+        cp ./cmd/app ./$context_dir/wsgw-e2e-app
+        docker build $context_dir -t $repo_name
+        if which minikube && minikube status;
+        then
+            eval "$(minikube docker-env)"
+        fi
+        docker build $context_dir -t $repo_name
   watch:
     cmds:
       - |

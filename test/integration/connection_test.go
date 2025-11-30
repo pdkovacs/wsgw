@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/mockapp"
 
 	"github.com/coder/websocket"

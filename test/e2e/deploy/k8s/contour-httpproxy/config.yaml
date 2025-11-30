@@ -1,7 +1,7 @@
 apiVersion: projectcontour.io/v1
 kind: HTTPProxy
 metadata:
-  name: wsgw-e2e-by-path
+  name: wsgw-e2e-app
   namespace: default
 spec:
   virtualhost:
@@ -30,3 +30,19 @@ spec:
             value: /
       timeoutPolicy:
         response: 1h
+---
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: wsgw-e2e-client
+  namespace: default
+spec:
+  virtualhost:
+    fqdn: wsgw-e2e-client.internal
+  routes:
+    - timeoutPolicy:
+        response: 1h
+        idle: 2h
+      services:
+        - name: wsgw-e2e-client
+          port: 8080

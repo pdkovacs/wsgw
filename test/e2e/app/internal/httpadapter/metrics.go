@@ -1,9 +1,9 @@
 package httpadapter
 
 import (
-	"wsgw/test/e2e/app/internal/monitoring"
+	"wsgw/pkgs/monitoring"
+	"wsgw/test/e2e/app/internal/config"
 
-	"go.opentelemetry.io/otel"
 	metric_api "go.opentelemetry.io/otel/metric"
 )
 
@@ -53,18 +53,6 @@ func newWSHandlerMetrics() *wsHandlerMetrics {
 	}
 }
 
-func createCounter(name string, description string) metric_api.Int64Counter {
-	meter := otel.Meter(monitoring.OtelScope)
-
-	counter, regErr := meter.Int64Counter(
-		name,
-		metric_api.WithDescription(description),
-		metric_api.WithUnit("{call}"),
-	)
-
-	if regErr != nil {
-		panic(regErr)
-	}
-
-	return counter
+func createCounter(name string, desc string) metric_api.Int64Counter {
+	return monitoring.CreateCounter(config.OtelScope, name, desc)
 }

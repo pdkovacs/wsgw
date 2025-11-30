@@ -1,0 +1,25 @@
+version: "3"
+
+env:
+  IMAGE_REPO: wsgw
+
+vars:
+  EXECUTABLE: wsgw
+  APP: ./cmd/wsgw
+  GOOS: linux
+  GOARCH: amd64
+  WSGW_LOG_FILE: '{{.WSGW_LOG_FILE | default "$HOME/workspace/logs/wsgw" }}'
+
+tasks:
+  single:
+    cmds:
+      - kubectl apply -f wsgw-deployment.yaml
+      - kubectl apply -f wsgw-service.yaml
+      - kubectl scale deployment wsgw --replicas 0
+      - kubectl scale deployment wsgw --replicas 1
+  clustered:
+    cmds:
+      - task: single
+      - kubectl apply -f redis-config.yaml
+      - kubectl apply -f redis-deployment.yaml
+      - kubectl apply -f redis-service.yaml

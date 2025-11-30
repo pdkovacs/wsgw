@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wsgw-e2e-client
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wsgw-e2e-client
+  template:
+    metadata:
+      labels:
+        app: wsgw-e2e-client
+        service.type: application
+    spec:
+      containers:
+        - name: wsgw-e2e-client
+          image: bitkit/wsgw-e2e-client
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: debug
+            - name: E2ECLIENT_SERVER_PORT
+              value: "8080"
+            - name: E2ECLIENT_PASSWORD_CREDENTIALS
+              valueFrom:
+                secretKeyRef:
+                  name: wsgw-e2e-app-users
+                  key: PASSWORD_CREDENTIALS
+            - name: E2ECLIENT_WSGW_URI
+              value: wsgw:8080
+            - name: E2ECLIENT_APP_SERVICE_URL
+              value: http://wsgw-e2e-app:8080
+            - name: E2ECLIENT_DEV_LOG_FILE
+              value: "{{.DEV_LOG_FILE}}"
+            - name: E2ECLIENT_OTLP_ENDPOINT
+              value: http://alloy.my-grafana.svc.cluster.local:4318
+            - name: E2ECLIENT_OTLP_SERVICE_NAMESPACE
+              value: "bitkit/wsgw"
+            - name: E2ECLIENT_OTLP_SERVICE_NAME
+              value: "e2e-client"
+          resources:
+            requests:
+              memory: "30M"
+              cpu: "100m"
+            limits:
+              memory: "500M"
+              cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wsgw-e2e-client
+  namespace: default
+spec:
+  selector:
+    app: wsgw-e2e-client
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer

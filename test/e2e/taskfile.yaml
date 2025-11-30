@@ -4,17 +4,18 @@ includes:
   app:
     taskfile: ./app/taskfile.yaml
     dir: ./app/
-  deploy:
-    taskfile: ./deployment/taskfile.yaml
-    dir: ./deployment
+  client:
+    taskfile: ./client/taskfile.yaml
+    dir: ./client/
+  k8s-impl:
+    taskfile: ./deploy/k8s/taskfile.yaml
+    dir: ./deploy/k8s
+
 env:
   IMAGE_REPO: wsgw
 
-vars:
-  UI_DIST: ./app/web/dist
-
 tasks:
-  build-ui:
+  ui:
     sources:
       - web/src/**/*
       - ./taskfile.yaml
@@ -24,41 +25,25 @@ tasks:
     cmds:
       - |
         cd ./web
+        npm install
         npm run build
-  build-app:
-    cmds:
-      - rm -rf "{{.UI_DIST}}/{index.html,assets}" || echo "No files to remove in {{.UI_DIST}}"
-      - cp -r ./web/dist/* {{.UI_DIST}}/
-      - task: app:build
-  build-client-device:
+  client-device:
     cmds:
       - |
         cd ./client-device/cmd
         GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o client-device main.go
-  image:
+  k8s:
     cmds:
-      - task: build-ui
-      - task: build-app
-      - |
-        context_dir=./deployment/image
-        repo_name=bitkit/wsgw-e2e-app
-        cp ./app/cmd/app ./$context_dir/wsgw-e2e-app
-        docker build $context_dir -t $repo_name
-        if which minikube && minikube status;
-        then
-            eval "$(minikube docker-env)"
-        fi
-        docker build $context_dir -t $repo_name
-  k8s-deploy:
-    cmds:
-      - task: image
-      - task: deploy:k8s
+      - task: app:image
+      - task: k8s-impl:app
+      - task: client:image
+      - task: k8s-impl:client
   aws-deploy:
     cmds:
       - |
         . ${HOME}/.my-aws-config
         . ${HOME}/.wsgw-test-cognito.secrets
-        cd ./deployment/aws/tf
+        cd ./deploy/aws/tf
         terragrunt apply --all --queue-include-external
         # terragrunt apply
   aws-destroy:
@@ -66,6 +51,6 @@ tasks:
       - |
         . ${HOME}/.my-aws-config
         . ${HOME}/.wsgw-test-cognito.secrets
-        cd ./deployment/aws/tf
+        cd ./deploy/aws/tf
         terragrunt destroy --all --queue-include-external
         # terragrunt apply

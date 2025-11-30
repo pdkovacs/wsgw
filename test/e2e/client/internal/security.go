@@ -1,0 +1,68 @@
+package internal
+
+import (
+	"encoding/base64"
+	"strings"
+	"wsgw/pkgs/logging"
+	"wsgw/test/e2e/client/internal/config"
+
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+)
+
+func authenticationCheck(conf config.Config) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		logger := zerolog.Ctx(c.Request.Context()).With().Str(logging.UnitLogger, "basic authn handler").Logger()
+		authenticated := false
+
+		authnHeaderValue, hasHeader := c.Request.Header["Authorization"]
+		logger.Debug().Bool("hasHeader", hasHeader).Send()
+		if hasHeader {
+			username, password, decodeOK := decodeBasicAuthnHeaderValue(authnHeaderValue[0])
+			logger.Debug().Bool("headerCouldBeDecoded", decodeOK).Send()
+			if decodeOK {
+				logger.Debug().Str("username", username).Send()
+				logger.Debug().Int("PasswordCredentialsLength", len(conf.PasswordCredentials)).Send()
+				for _, pc := range conf.PasswordCredentials {
+					logger.Debug().Str("currentUserName", pc.Username).Send()
+					if pc.Username == username && pc.Password == password {
+						logger.Debug().Msg("password matches")
+						authenticated = true
+						augmentedContextLogger := zerolog.Ctx(c.Request.Context()).With().Str("req_user", username).Logger()
+						c.Request = c.Request.WithContext(augmentedContextLogger.WithContext(c.Request.Context()))
+						break
+					}
+				}
+			}
+		}
+
+		logger.Debug().Bool("authenticationSuccess", authenticated).Send()
+
+		if authenticated {
+			c.Next()
+		} else {
+			c.Header("WWW-Authenticate", "Basic")
+			c.AbortWithStatus(401)
+		}
+	}
+
+}
+
+func decodeBasicAuthnHeaderValue(headerValue string) (userid string, password string, decodeOK bool) {
+	s := strings.SplitN(headerValue, " ", 2)
+	if len(s) != 2 {
+		return "", "", false
+	}
+
+	b, err := base64.StdEncoding.DecodeString(s[1])
+	if err != nil {
+		return "", "", false
+	}
+
+	pair := strings.SplitN(string(b), ":", 2)
+	if len(pair) != 2 {
+		return "", "", false
+	}
+
+	return pair[0], pair[1], true
+}

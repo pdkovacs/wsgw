@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 	"sync"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/rs/zerolog"
 )
