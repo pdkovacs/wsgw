@@ -12,11 +12,22 @@ import { AsyncValueStatus } from "./slice-utils";
 import { dial } from "./notifications";
 
 const App = () => {
+
+	const wsConn = useRef<WebSocket>(null);
+
 	const userInfo = useAppSelector(selectUserInfo);
 
 	const userIsLoggedIn = userInfo.status === AsyncValueStatus.resolved;
 
 	const dispatch = useAppDispatch();
+
+	useEffect(() => {
+		return () => {
+			if (!isNil(wsConn.current)) {
+				wsConn.current.close();
+			}
+		};
+	});
 
 	useEffect(() => {
 		dispatch(getUserInfo());

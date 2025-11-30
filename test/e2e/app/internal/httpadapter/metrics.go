@@ -15,8 +15,8 @@ type apiHandlerMetrics struct {
 func newAPIHandlerMetrics() *apiHandlerMetrics {
 
 	messageRequestCounter := createCounter(
-		"message.api.request.counter",
-		"Number of message sending request via api",
+		"api.message.request.counter",
+		"Number of message sending requests via api",
 	)
 
 	staleWsConnIdCounter := createCounter(
@@ -27,6 +27,29 @@ func newAPIHandlerMetrics() *apiHandlerMetrics {
 	return &apiHandlerMetrics{
 		messageRequestCounter: messageRequestCounter,
 		staleWsConnIdCounter:  staleWsConnIdCounter,
+	}
+}
+
+type wsHandlerMetrics struct {
+	connectRequestCounter    metric_api.Int64Counter
+	disconnectRequestCounter metric_api.Int64Counter
+}
+
+func newWSHandlerMetrics() *wsHandlerMetrics {
+
+	connectRequestCounter := createCounter(
+		"ws.connect.request.counter",
+		"Number of websocket connection requests",
+	)
+
+	disconnectRequestCounter := createCounter(
+		"ws.disconnect.request.counter",
+		"Number of websocket disconnection requests",
+	)
+
+	return &wsHandlerMetrics{
+		connectRequestCounter:    connectRequestCounter,
+		disconnectRequestCounter: disconnectRequestCounter,
 	}
 }
 

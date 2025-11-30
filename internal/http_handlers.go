@@ -104,7 +104,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func(ctx context
 	return &appConnection{connId, client}, nil
 }
 
-func handleClientDisconnected(appUrls applicationURLs, appConn *appConnection, logger zerolog.Logger) {
+func handleClientDisconnected(appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
 	logger = logger.With().Str(logging.MethodLogger, "handleClientDisconnected").Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 	logger.Debug().Msg("BEGIN")
@@ -114,6 +114,7 @@ func handleClientDisconnected(appUrls applicationURLs, appConn *appConnection, l
 		logger.Error().Msgf("failed to create request object: %v", err)
 		return
 	}
+	request.Header = connReqHeader
 	request.Header.Add(ConnectionIDHeaderKey, string(appConn.id))
 
 	response, requestErr := appConn.httpClient.Do(request)
@@ -127,6 +128,8 @@ func handleClientDisconnected(appUrls applicationURLs, appConn *appConnection, l
 		logger.Info().Msgf("Received status code %d", response.StatusCode)
 		return
 	}
+
+	logger.Debug().Msg("END")
 }
 
 // Calls the `POST /ws/message-received` endpoint on the backend with "msg" and ConnectionIDKey
@@ -214,7 +217,7 @@ func connectHandler(
 		defer func() {
 			wsConn.Close(websocket.StatusNormalClosure, "")
 
-			handleClientDisconnected(appUrls, appConn, logger)
+			handleClientDisconnected(appUrls, g.Request.Header, appConn, logger)
 
 			if clusterSupport != nil {
 				clusterSupport.deregisterConnection(g.Request.Context(), appConn.id)

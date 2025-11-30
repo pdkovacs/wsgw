@@ -9,6 +9,7 @@ env:
   IMAGE_REPO: wsgw
 
 vars:
+  EXECUTABLE: wsgw
   APP: ./cmd/wsgw
   GOOS: linux
   GOARCH: amd64
@@ -40,7 +41,7 @@ tasks:
       - |
         echo "GOOS {{.GOOS}} GOARCH {{.GOARCH}}"
         cd cmd
-        env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.APP}}
+        env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.EXECUTABLE}}
     sources:
       - ./cmd/**/*
       - ./internal/**/*

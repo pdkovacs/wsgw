@@ -116,13 +116,14 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 		authorizedGroup.GET("/user", userInfoHandler(userService))
 		authorizedGroup.GET("/users", userListHandler(userService, conf.PasswordCredentials))
 
-		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections)
 		apiGroup := authorizedGroup.Group("/api")
+		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections)
 		apiGroup.POST("/message", apiHandler.messageHandler())
 
 		wsGroup := authorizedGroup.Group("/ws")
-		wsGroup.GET(string(wsgw.ConnectPath), connectWsHandler(wsConnections))
-		wsGroup.POST(string(wsgw.DisonnectedPath), disconnectWsHandler(wsConnections))
+		wsHandler := newWSHandler(wsConnections)
+		wsGroup.GET(string(wsgw.ConnectPath), wsHandler.connectWsHandler(wsConnections))
+		wsGroup.POST(string(wsgw.DisonnectedPath), wsHandler.disconnectWsHandler(wsConnections))
 		wsGroup.POST(string(wsgw.MessagePath), messageWsHanlder())
 
 		authorizedGroup.POST("/longrequest", func(g *gin.Context) {
