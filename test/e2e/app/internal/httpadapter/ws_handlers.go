@@ -11,8 +11,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
+type WSHandler struct {
+	wsConnections conntrack.WsConnections
+	metrics       *wsHandlerMetrics
+}
+
+func newWSHandler(
+	wsConnections conntrack.WsConnections,
+) *WSHandler {
+	return &WSHandler{
+		wsConnections: wsConnections,
+		metrics:       newWSHandlerMetrics(),
+	}
+}
+
+func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
+		ws.metrics.connectRequestCounter.Add(g.Request.Context(), 1)
+
 		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
 		req := g.Request
 		res := g
@@ -43,8 +59,10 @@ func connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context
 	}
 }
 
-func disconnectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
+func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
+		ws.metrics.disconnectRequestCounter.Add(g.Request.Context(), 1)
+
 		logger0 := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
 		req := g.Request
 

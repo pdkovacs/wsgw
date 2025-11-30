@@ -1,17 +1,19 @@
 
 const initialReconnectInterval = () => 3 + 2 * Math.random();
 
-export const dial = (retryCount: number, messageReceived: (message: string, error: Error | null) => void) => {
+export const dial = (retryCount: number, messageReceived: (message: string, error: Error | null) => void): WebSocket => {
 
 	const reconnectInterval = retryCount === 0 ? initialReconnectInterval() : Math.exp(retryCount);
 
-	const conn = new WebSocket(`ws://${location.host}/ws/connect`);
+	let conn = new WebSocket(`ws://${location.host}/ws/connect`);
 
 	conn.addEventListener("close", ev => {
 		console.log(`WebSocket Disconnected code: ${ev.code}, reason: ${ev.reason}`, true);
 		if (ev.code !== 1001) {
 			console.log("Reconnecting in ", reconnectInterval);
-			setTimeout(() => dial(retryCount + 1, messageReceived), reconnectInterval * 1000);
+			setTimeout(() => {
+				conn = dial(retryCount + 1, messageReceived);
+			}, reconnectInterval * 1000);
 		}
 	});
 
@@ -29,4 +31,6 @@ export const dial = (retryCount: number, messageReceived: (message: string, erro
 		console.log(ev.data);
 		messageReceived(ev.data, null);
 	});
+
+	return conn;
 };

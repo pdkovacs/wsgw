@@ -22,7 +22,12 @@ const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/app"
 func InitOtel(ctx context.Context, conf config.Config) {
 	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "InitOtel").Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
 
-	logger.Info().Msg("Otel init starting...")
+	if len(conf.OtlpEndpoint) == 0 {
+		logger.Info().Msg("No OTLP endpoint, skipping...")
+		return
+	}
+
+	logger.Info().Msg("starting...")
 
 	endpoint, err := url.Parse(conf.OtlpEndpoint)
 	if err != nil {

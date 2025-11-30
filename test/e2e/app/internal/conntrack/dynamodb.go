@@ -3,6 +3,7 @@ package conntrack
 import (
 	"context"
 	"fmt"
+	"time"
 	"wsgw/internal/logging"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,6 +23,7 @@ const (
 type DyndbWsgwConnId struct {
 	UserId       string `dynamodbav:"UserId"`
 	ConnectionId string `dynamodbav:"ConnectionId"`
+	DateCreated  string `dynamodbav:"DateCreated"`
 }
 
 func (dyConnId *DyndbWsgwConnId) GetKey(ctx context.Context) (map[string]types.AttributeValue, error) {
@@ -48,7 +50,7 @@ type DyndbConntracker struct {
 func (connmap *DyndbConntracker) AddConnection(ctx context.Context, userId string, connId string) error {
 	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str(logging.MethodLogger, "AddConnectionId").Str("userId", userId).Str("connId", connId).Logger()
 
-	connIdAttr := &DyndbWsgwConnId{UserId: userId, ConnectionId: connId}
+	connIdAttr := &DyndbWsgwConnId{UserId: userId, ConnectionId: connId, DateCreated: time.Now().UTC().Format(time.RFC3339Nano)}
 
 	newItem, marshalErr := attributevalue.MarshalMap(connIdAttr)
 	if marshalErr != nil {

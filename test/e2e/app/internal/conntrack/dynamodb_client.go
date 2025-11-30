@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	aws_dyndb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -21,7 +20,7 @@ func createAwsConfig(dynamodbUrl string) (aws.Config, error) {
 
 	loadOptions := []func(*aws_config.LoadOptions) error{}
 
-	loadOptions = append(loadOptions, config.WithRegion("eu-west-2"))
+	loadOptions = append(loadOptions, aws_config.WithRegion("eu-west-2"))
 
 	if profile := os.Getenv("AWS_PROFILE"); len(profile) > 0 {
 		loadOptions = append(loadOptions, aws_config.WithSharedConfigProfile(profile))
@@ -31,7 +30,7 @@ func createAwsConfig(dynamodbUrl string) (aws.Config, error) {
 		loadOptions = append(loadOptions, aws_config.WithBaseEndpoint(dynamodbUrl))
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(), loadOptions...)
+	cfg, err := aws_config.LoadDefaultConfig(context.TODO(), loadOptions...)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
