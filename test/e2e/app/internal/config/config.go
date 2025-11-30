@@ -117,3 +117,5 @@ func GetInstanceId() string {
 	})
 	return instanceId
 }
+
+const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/app"

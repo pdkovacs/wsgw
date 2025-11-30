@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 	wsgw "wsgw/internal"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/conntrack"
 
 	"github.com/gin-gonic/gin"
@@ -96,7 +96,7 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 	}
 }
 
-func messageWsHanlder() func(g *gin.Context) {
+func messageWsHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS message handler").Logger()
 		req := g.Request

@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"sync"
 	"wsgw/internal/config"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/mockapp"
 
 	"github.com/stretchr/testify/mock"
@@ -57,10 +57,11 @@ func (s *baseTestSuite) SetupSuite() {
 	s.startMockApp()
 
 	configuration := config.Config{
-		ServerHost:          "localhost",
-		ServerPort:          0,
-		AppBaseUrl:          fmt.Sprintf("http://%s", s.mockApp.GetAppAddress()),
-		LoadBalancerAddress: "",
+		ServerHost:           "localhost",
+		ServerPort:           0,
+		AppBaseUrl:           fmt.Sprintf("http://%s", s.mockApp.GetAppAddress()),
+		AckNewConnWithConnId: true,
+		LoadBalancerAddress:  "",
 	}
 
 	server := wsgw.NewServer(

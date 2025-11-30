@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"

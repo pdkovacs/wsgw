@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"sync"
 	"wsgw/internal/app_errors"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
+	"wsgw/test/e2e/app/pgks/dto"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -46,55 +47,72 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 			g.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		var messageIn services.Message
+		var messageIn dto.E2EMessage
 		errMessageUnmarshal := json.Unmarshal(body, &messageIn)
 		if errMessageUnmarshal != nil {
-			logger.Error().Err(errMessageUnmarshal).Msg("failed to unmarshal request body into services.Message")
+			logger.Error().Err(errMessageUnmarshal).Msg("failed to unmarshal request body into dto.E2EMessage")
 			g.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
 
+		logger = logger.With().Str("testRunId", messageIn.TestRunId).Str("messageId", messageIn.Id).Logger()
+
 		//-- A super rudimentary aggregation of the potentially many requests that will be issued here:
-		status := http.StatusOK
+		status := http.StatusNoContent
 		var err error
 
 		//////////////////////////////////////////////////////////////////////
 		//-- Process by workers
 		//--------------------------------------------------------------------
 		userIdQueue := make(chan string, 1000)
-		numWorkers := 4
+		maxNumWorkers := 4
+		numWorkers := min(len(messageIn.Recipients), maxNumWorkers)
+
+		wgWorkUnits := sync.WaitGroup{}
+		wgWorkUnits.Add(len(messageIn.Recipients))
 
 		worker := func(id int) {
+			workerLogger := logger.With().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Logger()
 			keepOn := true
 
 			for keepOn {
 				select {
 				case userId, ok := <-userIdQueue:
 					if !ok {
-						logger.Debug().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("channel closed")
+						workerLogger.Debug().Msg("no more work")
 						keepOn = false
 						break
 					}
-					logger.Debug().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("working")
-					status, err = h.sendMessageToUserDevices(g.Request.Context(), messageIn.What, userId)
+					workerLogger.Debug().Msg("working")
+
+					// Skip error logging, callees did it with enough detail already
+					sendStatus, sendErrors := h.sendMessageToUserDevices(g.Request.Context(), &messageIn, userId)
+					if sendStatus != http.StatusNoContent {
+						status = sendStatus
+					}
+					if sendErrors != nil {
+						err = errors.Join(err, sendErrors)
+					}
+					wgWorkUnits.Done()
 				case <-g.Request.Context().Done():
-					logger.Info().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("ctx timeout")
+					workerLogger.Debug().Msg("ctx done")
 					keepOn = false
 				}
 			}
-			logger.Debug().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Msg("finished")
+			workerLogger.Debug().Msg("worker exiting")
 		}
-
-		wg := sync.WaitGroup{}
 		for i := range numWorkers {
-			wg.Go(func() { worker(i) })
+			go worker(i)
 		}
 
-		for _, userId := range messageIn.Whom {
-			userIdQueue <- userId
+		logger.Debug().Int("numRecipients", len(messageIn.Recipients)).Int("numWorkers", numWorkers).Msg("feeding workers")
+		for _, userId := range messageIn.Recipients {
+			userIdQueue <- string(userId)
 		}
+		logger.Debug().Msg("waiting for all recipients to be processed...")
+		wgWorkUnits.Wait()
+		logger.Debug().Msg("all recipients have been processed")
 		close(userIdQueue)
-		wg.Wait()
 		//////////////////////////////////////////////////////////////////////
 
 		if err == nil {
@@ -106,17 +124,16 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 	}
 }
 
-func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message string, userId string) (int, error) {
-	var status int
-	var err error
-
+func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message *dto.E2EMessage, userId string) (int, error) {
 	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "sendMessageToUserDevices").Str("userId", userId).Logger()
 
-	wsConnIds, getConnErr := h.wsConnections.GetConnections(ctx, userId)
-	if getConnErr != nil {
-		logger.Error().Err(getConnErr).Msg("failed to get wsgw connection-ids for user")
+	status := http.StatusNoContent
+
+	wsConnIds, err := h.wsConnections.GetConnections(ctx, userId)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to get wsgw connection-ids for user")
 		status = http.StatusInternalServerError
-		err = getConnErr
+		return status, errors.Join(nil, err)
 	}
 
 	if wsConnIds == nil {
@@ -132,7 +149,6 @@ func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message strin
 	errProcessMessage := services.SendMessage(ctx, h.wsgwUrl, userId, message, wsConnIds, deleteConnId)
 
 	if errProcessMessage != nil {
-		logger.Error().Err(errProcessMessage).Msg("failed to process message")
 		var badRequest *app_errors.BadRequest
 		if errors.As(errProcessMessage, &badRequest) {
 			status = http.StatusBadRequest
@@ -140,8 +156,7 @@ func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message strin
 			return status, err
 		}
 		status = http.StatusInternalServerError
-		err = errProcessMessage
-		return status, err
+		return status, errProcessMessage
 	}
 
 	return status, err

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
@@ -73,7 +73,7 @@ func (wsconns *wsConnections) processMessages(
 	wsIo wsIO,
 	onMessageFromClient onMgsReceivedFunc,
 ) error {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "processMessages").Str(ConnectionIDKey, string(connId)).Logger()
+	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "wsConnections.processMessages").Str(ConnectionIDKey, string(connId)).Logger()
 	conn := newConnection(connId, wsIo, wsconns.connectionMessageBuffer)
 
 	wsconns.addConnection(conn)
@@ -110,7 +110,7 @@ func (wsconns *wsConnections) processMessages(
 		select {
 		case msg := <-conn.fromApp:
 			logger.Debug().Msg("select: msg from backend")
-			err := writeTimeout(ctx, time.Second*5, wsIo, msg)
+			err := writeWithTimeout(ctx, time.Second*5, wsIo, msg)
 			if err != nil {
 				logger.Error().Err(err).Msg("select: failed to relay message from app to client")
 				return err
@@ -178,7 +178,7 @@ func (wsconns *wsConnections) getConnection(connId ConnectionID) (*connection, e
 	return conn, nil
 }
 
-func writeTimeout(ctx context.Context, timeout time.Duration, sIo wsIO, msg string) error {
+func writeWithTimeout(ctx context.Context, timeout time.Duration, sIo wsIO, msg string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 

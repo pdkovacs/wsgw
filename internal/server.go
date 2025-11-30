@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"time"
 	"wsgw/internal/config"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
+	"wsgw/pkgs/version_info"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
@@ -107,6 +108,10 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 
 	rootEngine.Use(RequestLogger("websocketGatewayServer"))
 
+	rootEngine.GET("/app-info", func(c *gin.Context) {
+		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))
+	})
+
 	wsConns := newWsConnections()
 
 	appUrls := appURLs{
@@ -120,6 +125,7 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 			wsConns,
 			configuration.LoadBalancerAddress,
 			createConnectionId,
+			configuration.AckNewConnWithConnId,
 			clusterSupport,
 		),
 	)
@@ -160,6 +166,7 @@ func RequestLogger(unitName string) func(g *gin.Context) {
 			Str("req_xid", xid.New().String()).
 			Str("req_method", g.Request.Method).
 			Str("req_url", g.Request.URL.RequestURI()).
+			Str("req_remote_addr", r.RemoteAddr).
 			Logger()
 		l.Debug().Str("unit", unitName).
 			Str("user_agent", g.Request.UserAgent()).

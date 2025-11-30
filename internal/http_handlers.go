@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -184,6 +184,7 @@ func connectHandler(
 	ws *wsConnections,
 	loadBalancerAddress string,
 	createConnectionId func(ctx context.Context) ConnectionID,
+	ackWithNewConnId bool,
 	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
@@ -241,11 +242,13 @@ func connectHandler(
 			clusterSupport.registerConnection(g.Request.Context(), appConn.id)
 		}
 
-		ackErr := sendMessageToClient(g.Request.Context(), wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
-		if ackErr != nil {
-			logger.Error().Err(fmt.Errorf("failed to send connect ack: %v", ackErr))
-			wsClosedError = ackErr
-			return
+		if ackWithNewConnId {
+			ackErr := sendMessageToClient(g.Request.Context(), wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
+			if ackErr != nil {
+				logger.Error().Err(fmt.Errorf("failed to send connect ack: %v", ackErr))
+				wsClosedError = ackErr
+				return
+			}
 		}
 
 		logger.Debug().Msg("websocket message processing about to start...")
@@ -258,9 +261,12 @@ func connectHandler(
 
 func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerFunc {
 	return func(g *gin.Context) {
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.FunctionLogger, "pushHandler").Logger()
+		logger.Debug().Msg("BEGIN")
+
 		connectionIdStr := g.Param(connIdPathParamName)
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "pushHandler").Str(ConnectionIDKey, connectionIdStr).Logger()
+		logger = logger.With().Str(ConnectionIDKey, connectionIdStr).Logger()
 
 		if connectionIdStr == "" {
 			logger.Info().Msgf("Missing path param: %s", connIdPathParamName)
@@ -268,6 +274,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			return
 		}
 
+		logger.Debug().Msg("waiting for input on wsconn...")
 		requestBody, errReadRequest := io.ReadAll(g.Request.Body)
 		g.Request.Body.Close()
 		if errReadRequest != nil {
@@ -275,6 +282,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			g.JSON(http.StatusInternalServerError, nil)
 			return
 		}
+		logger.Debug().Msg("ws message received")
 
 		bodyAsString := string(requestBody)
 
@@ -296,6 +304,8 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 		}
 
 		g.Status(http.StatusNoContent)
+
+		logger.Debug().Msg("END")
 	}
 }
 

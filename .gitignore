@@ -1,6 +1,6 @@
 .task
 wsgw
-buildinfo.txt
+version_data.txt
 .vite/
 fswatch.pid
 wsgw-e2e-app

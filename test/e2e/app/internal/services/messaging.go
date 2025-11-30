@@ -2,33 +2,36 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
+	"wsgw/test/e2e/app/pgks/dto"
 
 	"github.com/rs/zerolog"
 )
 
-type Message struct {
-	Whom []string `json:"whom"`
-	What string   `json:"what"`
-}
-
-func SendMessage(ctx context.Context, wsgwUrl string, userId string, message string, wsConnIds []string, discardConnId func(connId string)) error {
+func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
 	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "SendMessage").Logger()
-	logger0.Debug().Str("adressee", userId).Str("what", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
+	logger0.Debug().Str("recipient", userId).Any("message", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
 
 	var err error
+
+	messageAsString, marshalErr := json.Marshal(message)
+	if marshalErr != nil {
+		logger0.Error().Err(marshalErr).Any("messageIn", message).Msg("failed to marshal message")
+	}
 
 	for _, connId := range wsConnIds {
 		url := fmt.Sprintf("%s%s/%s", wsgwUrl, wsgw.MessagePath, connId)
 		logger := logger0.With().Str("url", url).Logger()
 
 		logger.Debug().Msg("address to send to...")
-		req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message))
+		req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(string(messageAsString)))
 		if createReqErr != nil {
 			logger.Error().Err(createReqErr).Msg("failed to create request")
 			continue
@@ -39,7 +42,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message str
 		response, sendReqErr := client.Do(req)
 		if sendReqErr != nil {
 			logger.Error().Err(sendReqErr).Msg("failed to send request")
-			err = sendReqErr
+			err = errors.Join(err, sendReqErr)
 			continue
 		}
 
@@ -51,7 +54,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message str
 			}
 
 			logger.Error().Str("url", url).Msg("failed to send request")
-			err = fmt.Errorf("sending message to client finished with unexpected HTTP status: %v", response.StatusCode)
+			err = errors.Join(err, fmt.Errorf("sending message to client finished with unexpected HTTP status: %v", response.StatusCode))
 			continue
 		}
 	}

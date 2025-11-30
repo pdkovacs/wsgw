@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"

@@ -1,0 +1,56 @@
+version: "3"
+
+vars:
+
+tasks:
+  userdb:
+    cmds:
+      - |
+        password_base=crixcrax
+        nr_users=3
+        mkdir -p $(dirname {{.DEV_LOG_FILE}})
+
+        pwcreds="["
+        for nummer in $(seq 1 2); do
+          if test $nummer -gt 1; then
+            pwcreds="${pwcreds},"
+          fi
+          pwcreds="${pwcreds}{\"username\":\"user${nummer}\",\"password\":\"${password_base}${nummer}\"}"
+        done
+        pwcreds="${pwcreds}]"
+        echo "pwcreds: $pwcreds"
+
+        if ! kubectl get secrets wsgw-e2e-app-users > /dev/null;
+        then
+          kubectl create secret generic wsgw-e2e-app-users "--from-literal=PASSWORD_CREDENTIALS=$pwcreds"
+        fi
+  app:
+    cmds:
+      - task: userdb
+      - |
+        kubectl apply -f ./app/e2e-app.yaml
+
+        echo "==== Rescaling wsgw-e2e-app, maybe...."
+        app_scale="{{.E2EAPP_SCALE}}"
+        if [ -z "$app_scale" ]; then
+          echo "E2EAPP_SCALE not set; using default scale for wsgw-e2e-app"
+        else
+          echo "Rescaling wsgw-e2e-app to $app_scale"
+          kubectl scale deployment wsgw-e2e-app --replicas 0
+          kubectl scale deployment wsgw-e2e-app --replicas $app_scale
+        fi
+  client:
+    cmds:
+      - task: userdb
+      - |
+        kubectl apply -f ./client/e2e-client.yaml
+
+        echo "==== Rescaling wsgw-e2e-client, maybe...."
+        client_scale="{{.E2ECLIENT_SCALE}}"
+        if [ -z "$client_scale" ]; then
+          echo "E2ECLIENT_SCALE not set; using default scale for wsgw-e2e-client"
+        else
+          echo "Rescaling wsgw-e2e-client to $client_scale"
+          kubectl scale deployment wsgw-e2e-client --replicas 0
+          kubectl scale deployment wsgw-e2e-client --replicas $client_scale
+        fi

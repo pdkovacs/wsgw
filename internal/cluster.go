@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 	"wsgw/internal/config"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"

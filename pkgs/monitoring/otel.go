@@ -5,21 +5,28 @@ import (
 	"fmt"
 	"net/url"
 	"time"
-	"wsgw/internal/logging"
-	"wsgw/test/e2e/app/internal/config"
+	"wsgw/internal/config"
+	"wsgw/pkgs/logging"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	metric_api "go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.22.0"
 )
 
-const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/app"
+type OtelConfig struct {
+	OtlpEndpoint         string
+	OtlpServiceNamespace string
+	OtlpServiceName      string
+}
 
-func InitOtel(ctx context.Context, conf config.Config) {
+func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "InitOtel").Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
 
 	if len(conf.OtlpEndpoint) == 0 {
@@ -37,12 +44,12 @@ func InitOtel(ctx context.Context, conf config.Config) {
 	insecure := endpoint.Scheme == "http"
 	// protocol := "http/protobuf"
 
-	var exporter sdkmetric.Exporter
+	var metricExporter sdkmetric.Exporter
 
 	if insecure {
-		exporter, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpoint(endpoint.Host), otlpmetrichttp.WithInsecure())
+		metricExporter, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpoint(endpoint.Host), otlpmetrichttp.WithInsecure())
 	} else {
-		exporter, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpoint(endpoint.Host))
+		metricExporter, err = otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpoint(endpoint.Host))
 	}
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create exporter")
@@ -65,12 +72,49 @@ func InitOtel(ctx context.Context, conf config.Config) {
 			attribute.KeyValue{Key: "service.instance.id", Value: attribute.StringValue(serviceInstanceID)},
 		),
 	)
-	metricReader := sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(5*time.Second))
+	metricReader := sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(5*time.Second))
 
 	provider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(metricReader),
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(provider)
-	addBuiltInGoMetricsToOTEL()
+	addBuiltInGoMetricsToOTEL(otelScope)
+
+	traceExporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpoint(endpoint.Host), otlptracehttp.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(traceExporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+}
+
+func CreateCounter(otelScope string, name string, description string, options ...metric_api.Int64CounterOption) metric_api.Int64Counter {
+	meter := otel.Meter(otelScope)
+
+	options = append(options, metric_api.WithDescription(description))
+	options = append(options, metric_api.WithUnit("{call}"))
+
+	counter, regErr := meter.Int64Counter(name, options...)
+
+	if regErr != nil {
+		panic(regErr)
+	}
+
+	return counter
+}
+
+func CreateHistogram(otelScope string, name string, description string, unit string, options ...metric_api.Float64HistogramOption) metric_api.Float64Histogram {
+	options = append(options, metric_api.WithDescription(description))
+	options = append(options, metric_api.WithUnit("{call}"))
+
+	histogram, err := otel.Meter(otelScope).Float64Histogram(name, options...)
+	if err != nil {
+		panic(err)
+	}
+
+	return histogram
 }

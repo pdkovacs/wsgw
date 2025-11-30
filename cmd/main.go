@@ -9,7 +9,8 @@ import (
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/internal/config"
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 )
 
 func main() {
@@ -31,13 +32,19 @@ func main() {
 
 	for _, value := range os.Args {
 		if value == "-v" || value == "--version" {
-			fmt.Print(config.GetBuildInfoString())
+			fmt.Print(config.GetVersionData())
 			serverWanted = false
 		}
 	}
 
 	if serverWanted {
 		conf := config.GetConfig(os.Args)
+
+		monitoring.InitOtel(ctx, monitoring.OtelConfig{
+			OtlpEndpoint:         conf.OtlpEndpoint,
+			OtlpServiceNamespace: conf.OtlpServiceNamespace,
+			OtlpServiceName:      conf.OtlpServiceName,
+		}, config.OtelScope)
 
 		var shutdownServer func() error
 

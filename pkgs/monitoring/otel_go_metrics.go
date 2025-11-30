@@ -14,10 +14,9 @@ import (
 
 const errorValue = -1.0
 
-// addMetricsToPrometheusRegistry function to add metrics to prometheus registry
-func addBuiltInGoMetricsToOTEL() {
+func addBuiltInGoMetricsToOTEL(otelScope string) {
 
-	meter := otel.Meter(OtelScope)
+	meter := otel.Meter(otelScope)
 
 	// Get descriptions for all supported metrics.
 	metricsMeta := metrics.All()

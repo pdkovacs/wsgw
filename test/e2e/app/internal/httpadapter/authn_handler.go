@@ -1,7 +1,7 @@
 package httpadapter
 
 import (
-	"wsgw/internal/logging"
+	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/security/authn"
 	"wsgw/test/e2e/app/internal/services"
