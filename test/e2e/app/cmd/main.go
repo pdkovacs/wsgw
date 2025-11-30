@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 	"wsgw/internal/logging"
+	"wsgw/internal/monitoring"
 	app "wsgw/test/e2e/app/internal"
 	"wsgw/test/e2e/app/internal/config"
-	"wsgw/test/e2e/app/internal/monitoring"
 
 	"github.com/rs/zerolog"
 )
@@ -37,7 +37,11 @@ func main() {
 	conf := config.GetConfig(os.Args)
 	logger.Info().Any("parsed config", conf).Send()
 
-	monitoring.InitOtel(ctx, conf)
+	monitoring.InitOtel(ctx, monitoring.OtelConfig{
+		OtlpEndpoint:         conf.OtlpEndpoint,
+		OtlpServiceNamespace: conf.OtlpServiceNamespace,
+		OtlpServiceName:      conf.OtlpServiceName,
+	}, config.OtelScope)
 
 	var shutdownServer func() error
 

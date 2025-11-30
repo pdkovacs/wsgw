@@ -5,21 +5,27 @@ import (
 	"fmt"
 	"net/url"
 	"time"
+	"wsgw/internal/config"
 	"wsgw/internal/logging"
-	"wsgw/test/e2e/app/internal/config"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/metric"
+	metric_api "go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.22.0"
 )
 
-const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/app"
+type OtelConfig struct {
+	OtlpEndpoint         string
+	OtlpServiceNamespace string
+	OtlpServiceName      string
+}
 
-func InitOtel(ctx context.Context, conf config.Config) {
+func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "InitOtel").Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
 
 	if len(conf.OtlpEndpoint) == 0 {
@@ -72,5 +78,34 @@ func InitOtel(ctx context.Context, conf config.Config) {
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(provider)
-	addBuiltInGoMetricsToOTEL()
+	addBuiltInGoMetricsToOTEL(otelScope)
+}
+
+func CreateCounter(otelScope string, name string, description string) metric_api.Int64Counter {
+	meter := otel.Meter(config.OtelScope)
+
+	counter, regErr := meter.Int64Counter(
+		name,
+		metric_api.WithDescription(description),
+		metric_api.WithUnit("{call}"),
+	)
+
+	if regErr != nil {
+		panic(regErr)
+	}
+
+	return counter
+}
+
+func CreateHistogram(otelScope string, name string, description string, unit string) metric_api.Float64Histogram {
+	histogram, err := otel.Meter(config.OtelScope).Float64Histogram(
+		name,
+		metric.WithDescription(description),
+		metric.WithUnit(unit),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return histogram
 }

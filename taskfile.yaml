@@ -1,6 +1,9 @@
 version: "3"
 
 includes:
+  k8s-impl:
+    taskfile: ./deploy/k8s/taskfile.yaml
+    dir: ./deploy/k8s
   e2e:
     taskfile: ./test/e2e/taskfile.yaml
     dir: ./test/e2e
@@ -71,8 +74,11 @@ tasks:
   k8s:
     cmds:
       - task: image
-      - kubectl apply -f deploy/k8s/wsgw-deployment.yaml
-      - kubectl apply -f deploy/k8s/wsgw-service.yaml
+      - task: k8s-impl:single
+  k8s-clustered:
+    cmds:
+      - task: image
+      - task: k8s:clustered
   cluster:
     cmds:
       - task: image

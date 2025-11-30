@@ -10,6 +10,7 @@ import (
 	wsgw "wsgw/internal"
 	"wsgw/internal/config"
 	"wsgw/internal/logging"
+	"wsgw/internal/monitoring"
 )
 
 func main() {
@@ -38,6 +39,12 @@ func main() {
 
 	if serverWanted {
 		conf := config.GetConfig(os.Args)
+
+		monitoring.InitOtel(ctx, monitoring.OtelConfig{
+			OtlpEndpoint:         conf.OtlpEndpoint,
+			OtlpServiceNamespace: conf.OtlpServiceNamespace,
+			OtlpServiceName:      conf.OtlpServiceName,
+		}, config.OtelScope)
 
 		var shutdownServer func() error
 

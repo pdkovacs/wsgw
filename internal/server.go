@@ -160,6 +160,7 @@ func RequestLogger(unitName string) func(g *gin.Context) {
 			Str("req_xid", xid.New().String()).
 			Str("req_method", g.Request.Method).
 			Str("req_url", g.Request.URL.RequestURI()).
+			Str("req_remote_addr", r.RemoteAddr).
 			Logger()
 		l.Debug().Str("unit", unitName).
 			Str("user_agent", g.Request.UserAgent()).

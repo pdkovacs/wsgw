@@ -11,12 +11,16 @@ import (
 )
 
 type Config struct {
-	ServerHost          string
-	ServerPort          int
-	AppBaseUrl          string
-	LoadBalancerAddress string // TODO: remove this
-	RedisHost           string
-	RedisPort           int
+	ServerHost            string
+	ServerPort            int
+	AppBaseUrl            string
+	LoadBalancerAddress   string // TODO: remove this
+	RedisHost             string
+	RedisPort             int
+	OtlpEndpoint          string
+	OtlpServiceNamespace  string
+	OtlpServiceName       string
+	OtlpServiceInstanceId string
 }
 
 const envNamePrefix = "WSGW_"
@@ -39,10 +43,14 @@ func GetConfig(args []string) Config {
 		},
 	}), nil)
 	return Config{
-		ServerHost:          k.String("SERVER_HOST"),
-		ServerPort:          k.Int("SERVER_PORT"),
-		AppBaseUrl:          k.String("APP_BASE_URL"),
-		LoadBalancerAddress: k.String("LOAD_BALANCER_ADDRESS"),
+		ServerHost:            k.String("SERVER_HOST"),
+		ServerPort:            k.Int("SERVER_PORT"),
+		AppBaseUrl:            k.String("APP_BASE_URL"),
+		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),
+		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
+		OtlpServiceNamespace:  k.String("OTLP_SERVICE_NAMESPACE"),
+		OtlpServiceName:       k.String("OTLP_SERVICE_NAME"),
+		OtlpServiceInstanceId: k.String("OTLP_SERVICE_INSTANCE_ID"),
 	}
 }
 
@@ -62,3 +70,5 @@ func GetInstanceId() string {
 	})
 	return instanceId
 }
+
+const OtelScope = "github.com/pdkovacs/wsgw/-"

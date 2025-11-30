@@ -110,8 +110,6 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	{
 		authorizedGroup.Use(authenticationCheck(conf, &userService))
 
-		logger.Debug().Msg("Setting up logout handler")
-
 		authorizedGroup.GET("/config", configHandler(conf.WsgwHost, conf.WsgwPort))
 		authorizedGroup.GET("/user", userInfoHandler(userService))
 		authorizedGroup.GET("/users", userListHandler(userService, conf.PasswordCredentials))

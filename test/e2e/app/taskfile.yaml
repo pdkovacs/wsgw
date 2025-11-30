@@ -4,6 +4,8 @@ vars:
   DEV_LOG_FILE: '{{.DEV_LOG_FILE | default "$HOME/workspace/logs/e2e-app" }}'
   GOOS: linux
   GOARCH: amd64
+  WEB_DIST_SOURCE: ../web/dist
+  WEB_DIST_TARGET: ./web/dist
 
 tasks:
   buildinfo:
@@ -13,12 +15,30 @@ tasks:
       - date +%Y-%m-%dT%H:%M:%S%z >> internal/config/buildinfo.txt
       - printf "COMMIT=" >> internal/config/buildinfo.txt
       - git rev-parse HEAD >> internal/config/buildinfo.txt
-  build:
+  app:
     cmds:
       - task: buildinfo
       - |
         cd ./cmd
         GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o app ./...
+  with-web:
+    cmds:
+      - rm -rf "{{.WEB_DIST_TARGET}}/{index.html,assets}" || echo "No files to remove in {{.WEB_DIST_TARGET}}"
+      - cp -r {{.WEB_DIST_SOURCE}}/* {{.WEB_DIST_TARGET}}/
+      - task: plain
+  image:
+    cmds:
+      - task: app
+      - |
+        context_dir=./image
+        repo_name=bitkit/wsgw-e2e-app
+        cp ./cmd/app ./$context_dir/wsgw-e2e-app
+        docker build $context_dir -t $repo_name
+        if which minikube && minikube status;
+        then
+            eval "$(minikube docker-env)"
+        fi
+        docker build $context_dir -t $repo_name
   watch:
     cmds:
       - |

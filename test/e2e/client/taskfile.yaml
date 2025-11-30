@@ -1,0 +1,26 @@
+version: "3"
+
+vars:
+  EXEC_NAME: wsgw-e2e-client
+  GOOS: linux
+  GOARCH: amd64
+
+tasks:
+  client:
+    cmds:
+      - |
+        cd ./cmd
+        GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o {{.EXEC_NAME}} ./...
+  image:
+    cmds:
+      - task: client
+      - |
+        context_dir=./image
+        repo_name=bitkit/{{.EXEC_NAME}}
+        cp ./cmd/{{.EXEC_NAME}} ./$context_dir/{{.EXEC_NAME}}
+        docker build $context_dir -t $repo_name
+        if which minikube && minikube status;
+        then
+            eval "$(minikube docker-env)"
+        fi
+        docker build $context_dir -t $repo_name

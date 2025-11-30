@@ -1,4 +1,4 @@
-package config
+package main
 
 import (
 	"encoding/json"
@@ -11,39 +11,27 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// PasswordCredentials holds password-credentials
-type PasswordCredentials struct {
+// passwordCredentials holds password-credentials
+type passwordCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// Config holds the available command-line options
-type Config struct {
+// config holds the available command-line options
+type config struct {
 	ServerHostname        string
 	ServerPort            int
-	ServerURLContext      string
-	SessionMaxAge         int
-	LoadBalancerAddress   string
-	PasswordCredentials   []PasswordCredentials
-	SessionDB             string
-	DBHost                string
-	DBPort                int
-	DBName                string
-	DBUser                string
-	DBPassword            string
-	UsernameCookie        string
-	DynamodbURL           string
-	WsgwHost              string
-	WsgwPort              int
+	PasswordCredentials   []passwordCredentials
+	AppServerUrl          string
 	OtlpEndpoint          string
 	OtlpServiceNamespace  string
 	OtlpServiceName       string
 	OtlpServiceInstanceId string
 }
 
-const envNamePrefix = "E2EAPP_"
+const envNamePrefix = "E2ECLIENT_"
 
-func GetConfig(args []string) Config {
+func GetConfig(args []string) config {
 	var k = koanf.New(".")
 
 	k.Load(env.Provider(".", env.Opt{
@@ -62,27 +50,17 @@ func GetConfig(args []string) Config {
 		},
 	}), nil)
 
-	var pwdcreds []PasswordCredentials
+	var pwdcreds []passwordCredentials
 	pwdcredsString := k.String("PASSWORD_CREDENTIALS")
 	if len(pwdcredsString) > 0 {
 		parseJson(pwdcredsString, &pwdcreds)
 	}
 
-	return Config{
+	return config{
 		ServerHostname:        k.String("SERVER_HOSTNAME"),
 		ServerPort:            k.Int("SERVER_PORT"),
-		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),
 		PasswordCredentials:   pwdcreds, // parsed from PASSWORD_CREDENTIALS
-		SessionDB:             k.String("SESSIONDB_NAME"),
-		DBHost:                k.String("DB_HOST"),
-		DBPort:                k.Int("DB_PORT"),
-		DBName:                k.String("DB_NAME"),
-		DBUser:                k.String("DB_USER"),
-		DBPassword:            k.String("DB_PASSWORD"),
-		UsernameCookie:        k.String("USERNAME_COOKIE"),
-		DynamodbURL:           k.String("DYNAMODB_URL"),
-		WsgwHost:              k.String("WSGW_HOST"),
-		WsgwPort:              k.Int("WSGW_PORT"),
+		AppServerUrl:          k.String("APP_SERVER_URL"),
 		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
 		OtlpServiceNamespace:  k.String("OTLP_SERVICE_NAMESPACE"),
 		OtlpServiceName:       k.String("OTLP_SERVICE_NAME"),
@@ -95,10 +73,6 @@ func parseJson(value string, parsed any) {
 	if unmarshalError != nil {
 		panic(fmt.Sprintf("failed to parse '%s': %#v\n", value, unmarshalError))
 	}
-}
-
-func GetWsgwUrl(conf Config) string {
-	return fmt.Sprintf("http://%s:%d", conf.WsgwHost, conf.WsgwPort)
 }
 
 var instanceId string
@@ -118,4 +92,4 @@ func GetInstanceId() string {
 	return instanceId
 }
 
-const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/app"
+const OtelScope = "github.com/pdkovacs/wsgw/test/e2e/client"
