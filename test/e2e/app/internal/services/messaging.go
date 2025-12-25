@@ -15,6 +15,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var httpClient http.Client = http.Client{
+	Timeout: time.Second * 15,
+}
+
 func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
 	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "SendMessage").Logger()
 	logger0.Debug().Str("recipient", userId).Any("message", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
@@ -36,10 +40,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 			logger.Error().Err(createReqErr).Msg("failed to create request")
 			continue
 		}
-		client := http.Client{
-			Timeout: time.Second * 15,
-		}
-		response, sendReqErr := client.Do(req)
+		response, sendReqErr := httpClient.Do(req)
 		if sendReqErr != nil {
 			logger.Error().Err(sendReqErr).Msg("failed to send request")
 			err = errors.Join(err, sendReqErr)

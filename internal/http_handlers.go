@@ -55,6 +55,10 @@ type applicationURLs interface {
 	message() string
 }
 
+var httpClient http.Client = http.Client{
+	Timeout: time.Second * 15,
+}
+
 type appConnection struct {
 	id         ConnectionID
 	httpClient http.Client
@@ -79,10 +83,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func(ctx context
 
 	request.Header.Add(ConnectionIDHeaderKey, string(connId))
 
-	client := http.Client{
-		Timeout: time.Second * 15,
-	}
-	response, requestErr := client.Do(request)
+	response, requestErr := httpClient.Do(request)
 	if requestErr != nil {
 		logger.Error().Msgf("failed to send request: %v", requestErr)
 		return nil, errAppConnInternal
@@ -101,7 +102,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func(ctx context
 
 	logger.Debug().Msgf("app has accepted: %v", connId)
 
-	return &appConnection{connId, client}, nil
+	return &appConnection{connId, httpClient}, nil
 }
 
 func handleClientDisconnected(appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {

@@ -16,6 +16,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var httpClient http.Client = http.Client{
+	Timeout: time.Second * 15,
+}
+
 type recipientId string
 
 type Message struct {
@@ -57,10 +61,7 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		return createReqErr
 	}
 	req.Header = createBasicAuthnHeader(msg.sender.Username, msg.sender.Password)
-	client := http.Client{
-		Timeout: time.Second * 15,
-	}
-	response, sendReqErr := client.Do(req)
+	response, sendReqErr := httpClient.Do(req)
 	if sendReqErr != nil {
 		logger.Error().Err(sendReqErr).Msgf("failed to send request: %#v", sendReqErr)
 		return sendReqErr
