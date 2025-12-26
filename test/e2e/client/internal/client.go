@@ -7,16 +7,21 @@ import (
 	math_rand "math/rand"
 	"time"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type client struct {
 	credentials        config.PasswordCredentials
 	ws                 *wsClient // currently used only for receiving push messages
 	sendMessageApiUrl  string
-	outsandingMessages *pendingDeliveriesByMsgId
+	outsandingMessages *pendingDeliveryTracker
 	monitoring         *clientMonitoring
 }
 
@@ -24,7 +29,7 @@ func newClient(
 	credentials config.PasswordCredentials,
 	wsgwUri string,
 	sendMessageApiUrl string,
-	outsandingMessages *pendingDeliveriesByMsgId,
+	outsandingMessages *pendingDeliveryTracker,
 	monitoring *clientMonitoring,
 ) *client {
 	ws := newWSClient(wsgwUri)
@@ -64,21 +69,24 @@ func (cli *client) connectAndListen(ctx context.Context) error {
 	return nil
 }
 
-func (cli *client) run(ctx context.Context, runId string, allUserNames []string) {
+func (cli *client) startTest(ctx context.Context, runId string, allUserNames []string) {
 	msg := cli.createMessage(ctx, runId, allUserNames)
 	msg.sendMessage(ctx, cli.sendMessageApiUrl)
 }
 
 func (cli *client) createMessage(ctx context.Context, runId string, recipientCandidates []string) *Message {
-	recipientCount := math_rand.Intn(len(recipientCandidates)/2-1) + len(recipientCandidates)/2
+	recipientCount := len(recipientCandidates)
+	if recipientCount > 10 {
+		recipientCount = math_rand.Intn(len(recipientCandidates)/2-1) + len(recipientCandidates)/2
+	}
 	cli.monitoring.incMsgRecipientToReachCounter(ctx, int64(recipientCount))
 	recipients := selectRecipients(recipientCandidates, recipientCount)
 
 	msgId := rand.Text()
 
-	convertedRecipId := []recipientId{}
+	convertedRecipId := []recipientName{}
 	for _, recip := range recipients {
-		convertedRecipId = append(convertedRecipId, recipientId(recip))
+		convertedRecipId = append(convertedRecipId, recipientName(recip))
 	}
 
 	msg := &Message{
@@ -90,7 +98,7 @@ func (cli *client) createMessage(ctx context.Context, runId string, recipientCan
 		text:       fmt.Sprintf("[%s] %s", msgId, "a test message"),
 	}
 
-	cli.outsandingMessages.add(msg)
+	cli.outsandingMessages.addPending(msg)
 	cli.monitoring.incMsgCreatedCounter(ctx)
 
 	return msg
@@ -109,22 +117,51 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 		return
 	}
 
+	logger = logger.With().Str("msgId", msgFromApp.Id).Str("destination", msgFromApp.Destination).Logger()
+
+	ctx = monitoring.ExtractTraceData(ctx, msgFromApp.TraceData)
+	tracer := otel.Tracer(config.OtelScope)
+	deliveryCtx, deliverySpan := tracer.Start(
+		ctx,
+		"wsgw-e2e-test-client-received-message",
+		trace.WithAttributes(
+			attribute.String("runId", msgFromApp.TestRunId),
+			attribute.KeyValue{Key: "msgId", Value: attribute.StringValue(msgFromApp.Id)},
+			attribute.KeyValue{Key: "destination", Value: attribute.StringValue(msgFromApp.Destination)},
+		),
+	)
+	defer deliverySpan.End()
+
 	logger = logger.With().Str("sender", msgFromApp.Sender).Logger()
 	msgInRepo := cli.outsandingMessages.get(msgFromApp.Id)
 	if msgInRepo == nil {
-		logger.Debug().Str("query", msgFromAppStr).Msg("incoming message not outstanding")
-		cli.monitoring.incOutstandingMsgNotFoundCounter(ctx)
+		cli.monitoring.incOutstandingMsgNotFoundCounter(deliveryCtx)
+		deliverySpan.SetStatus(codes.Error, "incoming message not found amongst outstanding")
 		return
 	}
 
-	cli.outsandingMessages.remove(msgFromApp.Id, recipientId(cli.credentials.Username))
-
-	if msgInRepo.text != msgFromApp.Data {
-		cli.monitoring.incdMsgTextMismatchCounter(ctx)
+	msgDone := cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username))
+	if msgDone != nil {
+		msgDone.span.End()
 	}
 
-	deliveryDuration := receivedAt.Sub(msgInRepo.sentAt)
-	logger.Debug().Dur("delivery", deliveryDuration).Msg("recording duration")
-	cli.monitoring.recordDeliveryDurationMs(ctx, deliveryDuration)
-	cli.monitoring.recordDeliveryDurationUs(ctx, deliveryDuration)
+	if msgInRepo.text != msgFromApp.Data {
+		cli.monitoring.incdMsgTextMismatchCounter(deliveryCtx)
+	}
+
+	sentAt, timeParsingErr := msgFromApp.GetSentAt()
+	if timeParsingErr != nil {
+		logger.Error().Err(timeParsingErr).Msg("failed to parse sentAt time")
+		deliverySpan.SetStatus(codes.Error, "failed to parse sentAt time")
+		return
+	}
+
+	deliveryDuration := receivedAt.Sub(sentAt)
+	logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("recording duration")
+	if deliveryDuration.Milliseconds() > 400 {
+		logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("extra slow")
+	}
+	cli.monitoring.recordDeliveryDurationMs(deliveryCtx, deliveryDuration)
+	cli.monitoring.recordDeliveryDurationUs(deliveryCtx, deliveryDuration)
+	deliverySpan.SetStatus(codes.Ok, "incoming message successfully processed")
 }

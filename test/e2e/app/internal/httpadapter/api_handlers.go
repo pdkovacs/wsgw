@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 	"sync"
-	"time"
 	"wsgw/internal/app_errors"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
 	"wsgw/test/e2e/app/pgks/dto"
@@ -56,6 +56,8 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 			return
 		}
 
+		ctx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+
 		logger = logger.With().Str("testRunId", messageIn.TestRunId).Str("messageId", messageIn.Id).Logger()
 
 		//-- A super rudimentary aggregation of the potentially many requests that will be issued here:
@@ -71,9 +73,6 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 
 		wgWorkUnits := sync.WaitGroup{}
 		wgWorkUnits.Add(len(messageIn.Recipients))
-
-		now := time.Now()
-		messageIn.SentAt = now.String()
 
 		worker := func(id int) {
 			workerLogger := logger.With().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Logger()
@@ -94,7 +93,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 					messageIn.Recipients = []string{userId}
 
 					// Skip error logging, callees did it with enough detail already
-					sendStatus, sendErrors := h.sendMessageToUserDevices(g.Request.Context(), &messageIn, userId)
+					sendStatus, sendErrors := h.sendMessageToUserDevices(ctx, &messageIn, userId)
 					if sendStatus != http.StatusNoContent {
 						status = sendStatus
 					}
@@ -102,7 +101,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 						err = errors.Join(err, sendErrors)
 					}
 					wgWorkUnits.Done()
-				case <-g.Request.Context().Done():
+				case <-ctx.Done():
 					workerLogger.Debug().Msg("ctx done")
 					keepOn = false
 				}

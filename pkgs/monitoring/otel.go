@@ -16,6 +16,7 @@ import (
 	metric_api "go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.22.0"
 )
@@ -24,6 +25,7 @@ type OtelConfig struct {
 	OtlpEndpoint         string
 	OtlpServiceNamespace string
 	OtlpServiceName      string
+	OtlpTraceSampleAll   bool
 }
 
 func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
@@ -85,9 +87,16 @@ func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 	if err != nil {
 		panic(err)
 	}
-	tp := sdktrace.NewTracerProvider(
+
+	traceOptions := []sdktrace.TracerProviderOption{
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(res),
+	}
+	if conf.OtlpTraceSampleAll {
+		traceOptions = append(traceOptions, trace.WithSampler(trace.AlwaysSample()))
+	}
+	tp := sdktrace.NewTracerProvider(
+		traceOptions...,
 	)
 	otel.SetTracerProvider(tp)
 }

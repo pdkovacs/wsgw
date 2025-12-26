@@ -44,6 +44,7 @@ func main() {
 			OtlpEndpoint:         conf.OtlpEndpoint,
 			OtlpServiceNamespace: conf.OtlpServiceNamespace,
 			OtlpServiceName:      conf.OtlpServiceName,
+			OtlpTraceSampleAll:   conf.OtlpTraceSampleAll,
 		}, config.OtelScope)
 
 		var shutdownServer func() error

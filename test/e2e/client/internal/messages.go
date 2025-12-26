@@ -10,25 +10,30 @@ import (
 	"sync"
 	"time"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/pgks/dto"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var httpClient http.Client = http.Client{
 	Timeout: time.Second * 15,
 }
 
-type recipientId string
+type recipientName string
 
 type Message struct {
 	testRunId  string
 	id         string
 	text       string
 	sender     config.PasswordCredentials
-	recipients []recipientId
+	recipients []recipientName
 	sentAt     time.Time
+	span       trace.Span
 }
 
 func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
@@ -47,6 +52,8 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		Sender:     msg.sender.Username,
 		Recipients: recips,
 		Data:       msg.text,
+		// the test-app will basically ignore this for now, it will start a new root context for each push
+		TraceData: monitoring.InjectTraceData(ctx),
 	}
 
 	message, marshalErr := json.Marshal(msgDto)
@@ -60,6 +67,15 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		return createReqErr
 	}
 	req.Header = createBasicAuthnHeader(msg.sender.Username, msg.sender.Password)
+
+	tracer := otel.Tracer(config.OtelScope)
+	ctx, msg.span = tracer.Start(
+		ctx,
+		"wsgw-e2e-test-client-initiate-messages",
+		trace.WithAttributes(attribute.String("runId", msgDto.TestRunId)),
+	)
+	monitoring.InjectIntoHeader(ctx, req.Header)
+
 	response, sendReqErr := httpClient.Do(req)
 	if sendReqErr != nil {
 		logger.Error().Err(sendReqErr).Msgf("failed to send request: %#v", sendReqErr)
@@ -75,93 +91,81 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 	return nil
 }
 
-type messageAndDeliveries struct {
-	msg        *Message
-	recipients []recipientId
+// TODO:
+// For now, recipients will be usernames, but it really should be connectionIds (userDevices aka. destinations).
+// The test-client could actually know of the connectionIds: see WSGW_ACK_NEW_CONN_WITH_CONN_ID (AckNewConnWithConnId)
+type pendingDeliveryTracker struct {
+	pendingDeliveries map[string]*Message
+	lock              sync.RWMutex
+	notifyEmpty       func()
 }
 
-type pendingDeliveriesByMsgId struct {
-	deliveries  map[string]messageAndDeliveries
-	lock        sync.RWMutex
-	notifyEmpty func()
-}
-
-func newMessagesById() *pendingDeliveriesByMsgId {
-	return &pendingDeliveriesByMsgId{
-		deliveries: map[string]messageAndDeliveries{},
-		lock:       sync.RWMutex{},
+func newMessagesById() *pendingDeliveryTracker {
+	return &pendingDeliveryTracker{
+		pendingDeliveries: map[string]*Message{},
+		lock:              sync.RWMutex{},
 	}
 }
 
-func (mr *pendingDeliveriesByMsgId) add(msg *Message) {
+func (mr *pendingDeliveryTracker) addPending(msg *Message) {
+	mr.lock.Lock()
+	defer mr.lock.Unlock()
+	mr.pendingDeliveries[msg.id] = msg
+}
+
+func (mr *pendingDeliveryTracker) get(msgId string) *Message {
 	mr.lock.Lock()
 	defer mr.lock.Unlock()
 
-	msgDelivs := messageAndDeliveries{
-		msg:        msg,
-		recipients: []recipientId{},
-	}
-	for _, recip := range msg.recipients {
-		msgDelivs.recipients = append(msgDelivs.recipients, recip)
-	}
-	mr.deliveries[msg.id] = msgDelivs
-}
-
-func (mr *pendingDeliveriesByMsgId) get(msgId string) *Message {
-	mr.lock.Lock()
-	defer mr.lock.Unlock()
-
-	deliveries, has := mr.deliveries[msgId]
+	msg, has := mr.pendingDeliveries[msgId]
 
 	if !has {
 		return nil
 	}
 
-	return deliveries.msg
+	return msg
 }
 
-func (mr *pendingDeliveriesByMsgId) remove(msgId string, recipient recipientId) bool {
+// Returns the message, if it was delivered to all recipients
+func (mr *pendingDeliveryTracker) markDelivered(msgId string, recipient recipientName) *Message {
 	mr.lock.Lock()
 	defer mr.lock.Unlock()
 
 	defer func() {
-		if mr.notifyEmpty != nil && len(mr.deliveries) == 0 {
+		if mr.notifyEmpty != nil && len(mr.pendingDeliveries) == 0 {
 			mr.notifyEmpty()
 		}
 	}()
 
-	deliveries, has := mr.deliveries[msgId]
+	msg, has := mr.pendingDeliveries[msgId]
 	if !has {
-		return false
+		return nil
 	}
 
-	found := false
-	updatedRecipList := []recipientId{}
-	for _, recip := range deliveries.recipients {
+	updatedRecipList := []recipientName{}
+	for _, recip := range msg.recipients {
 		if recip == recipient {
-			found = true
 			continue
 		}
 		updatedRecipList = append(updatedRecipList, recip)
 	}
 
 	if len(updatedRecipList) == 0 {
-		delete(mr.deliveries, msgId)
-		return found
+		delete(mr.pendingDeliveries, msgId)
+		return msg
 	}
 
-	updatedDelivs := deliveries
-	updatedDelivs.recipients = updatedRecipList
-	mr.deliveries[msgId] = updatedDelivs
+	msg.recipients = updatedRecipList
+	mr.pendingDeliveries[msgId] = msg
 
-	return found
+	return nil
 }
 
-func (mr *pendingDeliveriesByMsgId) watchDraining(notifyEmpty func()) {
+func (mr *pendingDeliveryTracker) watchDraining(notifyEmpty func()) {
 	mr.lock.Lock()
 	defer mr.lock.Unlock()
 
-	if len(mr.deliveries) == 0 {
+	if len(mr.pendingDeliveries) == 0 {
 		notifyEmpty()
 	}
 
@@ -177,7 +181,7 @@ func selectRecipients(candidates []string, howMany int) []string {
 	result := make([]string, 0, howMany)
 	k := howMany // elements still needed
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		remaining := n - i // elements left to visit (including current)
 
 		// Probability of selecting current element = k / remaining
