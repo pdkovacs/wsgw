@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/pgks/dto"
 	"wsgw/test/e2e/client/internal/config"
 
@@ -47,6 +48,8 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		Sender:     msg.sender.Username,
 		Recipients: recips,
 		Data:       msg.text,
+		// the test-app will basically ignore this for now, it will start a new root context for each push
+		TraceData: monitoring.InjectTraceData(ctx),
 	}
 
 	message, marshalErr := json.Marshal(msgDto)
@@ -75,6 +78,9 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 	return nil
 }
 
+// TODO:
+// For now, recipients will be usernames, but it really should be connectionIds (userDevices aka. destinations).
+// The test-client could actually know of the connectionIds: see WSGW_ACK_NEW_CONN_WITH_CONN_ID (AckNewConnWithConnId)
 type messageAndDeliveries struct {
 	msg        *Message
 	recipients []recipientId

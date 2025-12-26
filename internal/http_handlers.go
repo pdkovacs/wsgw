@@ -9,11 +9,14 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"wsgw/internal/config"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 )
 
 // TODO: make this configurable?
@@ -265,6 +268,12 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.FunctionLogger, "pushHandler").Logger()
 		logger.Debug().Msg("BEGIN")
 
+		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		tracer := otel.Tracer(config.OtelScope)
+		tmpCtx, span := tracer.Start(requestContext, "msg-in-wsgw")
+		defer span.End()
+		requestContext = tmpCtx
+
 		connectionIdStr := g.Param(connIdPathParamName)
 
 		logger = logger.With().Str(ConnectionIDKey, connectionIdStr).Logger()
@@ -287,7 +296,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 
 		bodyAsString := string(requestBody)
 
-		errPush := ws.push(g.Request.Context(), bodyAsString, ConnectionID(connectionIdStr))
+		errPush := ws.push(requestContext, bodyAsString, ConnectionID(connectionIdStr))
 		if errPush == errConnectionNotFound {
 			if clusterSupport == nil {
 				logger.Info().Msg("ws connection not found")
@@ -295,7 +304,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 				return
 			}
 			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...", connectionIdStr)
-			errPush = clusterSupport.relayMessage(g.Request.Context(), ConnectionID(connectionIdStr), bodyAsString)
+			errPush = clusterSupport.relayMessage(requestContext, ConnectionID(connectionIdStr), bodyAsString)
 		}
 
 		if errPush != nil {

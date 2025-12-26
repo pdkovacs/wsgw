@@ -7,9 +7,14 @@ import (
 	math_rand "math/rand"
 	"time"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type client struct {
@@ -109,22 +114,42 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 		return
 	}
 
+	logger = logger.With().Str("msgId", msgFromApp.Id).Str("destination", msgFromApp.Destination).Logger()
+
+	ctx = monitoring.ExtractTraceData(ctx, msgFromApp.TraceData)
+	tracer := otel.Tracer(config.OtelScope)
+	deliveryCtx, deliverySpan := tracer.Start(
+		ctx,
+		"wsgw-e2e-test-client-received-message",
+		trace.WithAttributes(
+			attribute.String("runId", msgFromApp.TestRunId),
+			attribute.KeyValue{Key: "msgId", Value: attribute.StringValue(msgFromApp.Id)},
+			attribute.KeyValue{Key: "destination", Value: attribute.StringValue(msgFromApp.Destination)},
+		),
+	)
+	defer deliverySpan.End()
+
 	logger = logger.With().Str("sender", msgFromApp.Sender).Logger()
 	msgInRepo := cli.outsandingMessages.get(msgFromApp.Id)
 	if msgInRepo == nil {
-		logger.Debug().Str("query", msgFromAppStr).Msg("incoming message not outstanding")
-		cli.monitoring.incOutstandingMsgNotFoundCounter(ctx)
+		logger.Debug().Str("query", msgFromAppStr).Msg("incoming message not found amongst outstanding")
+		cli.monitoring.incOutstandingMsgNotFoundCounter(deliveryCtx)
+		deliverySpan.SetStatus(codes.Error, "incoming message not found amongst outstanding")
 		return
 	}
 
 	cli.outsandingMessages.remove(msgFromApp.Id, recipientId(cli.credentials.Username))
 
 	if msgInRepo.text != msgFromApp.Data {
-		cli.monitoring.incdMsgTextMismatchCounter(ctx)
+		cli.monitoring.incdMsgTextMismatchCounter(deliveryCtx)
 	}
 
 	deliveryDuration := receivedAt.Sub(msgInRepo.sentAt)
-	logger.Debug().Dur("delivery", deliveryDuration).Msg("recording duration")
-	cli.monitoring.recordDeliveryDurationMs(ctx, deliveryDuration)
-	cli.monitoring.recordDeliveryDurationUs(ctx, deliveryDuration)
+	logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("recording duration")
+	if deliveryDuration.Milliseconds() > 400 {
+		logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("extra slow")
+	}
+	cli.monitoring.recordDeliveryDurationMs(deliveryCtx, deliveryDuration)
+	cli.monitoring.recordDeliveryDurationUs(deliveryCtx, deliveryDuration)
+	deliverySpan.SetStatus(codes.Ok, "incoming message successfully processed")
 }

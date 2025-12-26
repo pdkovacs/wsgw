@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel"
 )
 
 type testRun struct {
@@ -34,14 +33,9 @@ func newTestRun(notifyCompleted func()) *testRun {
 func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Config) {
 	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "createConnectRunClients").Logger()
 
-	tracer := otel.Tracer(config.OtelScope)
-	ctx, span := tracer.Start(ctx, "createConnectRunClients")
-	defer span.End()
-
 	sendMessageApiUrl := fmt.Sprintf("%s%s", conf.AppServiceUrl, "/api/message")
 	clients := []*client{}
 
-	span.AddEvent("creatingClients")
 	allUserNames := []string{}
 	for _, credentials := range conf.PasswordCredentials {
 		cli := newClient(credentials, conf.WsgwUri, sendMessageApiUrl, r.outsandingMessages, r.monitoring)
@@ -51,12 +45,10 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 		allUserNames = append(allUserNames, credentials.Username)
 	}
 
-	span.AddEvent("started-running-clients")
 	for _, cli := range clients {
 		cli.run(ctx, r.runId, allUserNames)
 	}
 	logger.Debug().Msg("finished-running-clients")
-	span.AddEvent("finished-running-clients")
 
 	r.outsandingMessages.watchDraining(r.notifyCompleted)
 

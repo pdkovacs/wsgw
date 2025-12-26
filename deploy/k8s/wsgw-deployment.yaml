@@ -33,6 +33,12 @@ spec:
               value: "http"
             - name: WSGW_APP_BASE_URL
               value: "http://wsgw-e2e-app:8080"
+            - name: WSGW_OTLP_ENDPOINT
+              value: http://alloy.my-grafana.svc.cluster.local:4318
+            - name: WSGW_OTLP_SERVICE_NAMESPACE
+              value: "bitkit/wsgw"
+            - name: WSGW_OTLP_SERVICE_NAME
+              value: "wsgw"
           ports:
             - containerPort: 8080
           resources:

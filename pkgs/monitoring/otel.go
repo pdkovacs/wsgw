@@ -85,6 +85,7 @@ func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 	if err != nil {
 		panic(err)
 	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(res),
