@@ -14,8 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 func CreateStartServer(serverCtx context.Context, conf config.Config) error {
@@ -62,6 +60,8 @@ func initEndpoints(conf config.Config) *gin.Engine {
 	authorizedGroup.Use(authenticationCheck(conf))
 	authorizedGroup.POST("/run", func(g *gin.Context) {
 		runContext, cancel := context.WithCancel(context.WithoutCancel(g.Request.Context()))
+		defer cancel()
+
 		testRunDone := make(chan struct{})
 		notifyDone := func() {
 			close(testRunDone)
@@ -69,7 +69,6 @@ func initEndpoints(conf config.Config) *gin.Engine {
 
 		tracer := otel.Tracer(config.OtelScope)
 		runContext, span := tracer.Start(runContext, "test-run")
-		// Shouldn't we end the span before canceling the context?
 		defer span.End()
 
 		run := newTestRun(notifyDone)
@@ -77,26 +76,15 @@ func initEndpoints(conf config.Config) *gin.Engine {
 		runContext = logger.WithContext(runContext)
 		run.createConnectRunClients(runContext, conf)
 
-		carrier := http.Header{}
-		propagator := propagation.TraceContext{}
-		propagator.Inject(runContext, propagation.HeaderCarrier(carrier))
-		for header := range carrier {
-			g.Header(header, carrier[header][0])
-		}
-
 		g.JSON(http.StatusOK, map[string]string{"id": run.runId})
-
-		// Add an attribute for demonstration
-		span.SetAttributes(attribute.Bool("bool attribute", true))
-		span.AddEvent("Request handled")
 
 		select {
 		case <-testRunDone:
-			logger.Debug().Msg("test-run done")
+			logger.Debug().Bool("isContextAlive", runContext.Err() == nil).Msg("test-run done")
 		case <-time.After(60 * time.Second):
 			logger.Debug().Msg("had enough waiting")
 		}
-		cancel()
+		logger.Debug().Msg("about to cancel test run context...")
 	})
 
 	return rootEngine

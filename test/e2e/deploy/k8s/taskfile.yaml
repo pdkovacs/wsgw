@@ -11,7 +11,7 @@ tasks:
         mkdir -p $(dirname {{.DEV_LOG_FILE}})
 
         pwcreds="["
-        for nummer in $(seq 1 2); do
+        for nummer in $(seq 1 1024); do
           if test $nummer -gt 1; then
             pwcreds="${pwcreds},"
           fi
