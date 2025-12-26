@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 	"wsgw/internal/app_errors"
 	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/conntrack"
@@ -71,6 +72,9 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 		wgWorkUnits := sync.WaitGroup{}
 		wgWorkUnits.Add(len(messageIn.Recipients))
 
+		now := time.Now()
+		messageIn.SentAt = now.String()
+
 		worker := func(id int) {
 			workerLogger := logger.With().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Logger()
 			keepOn := true
@@ -84,6 +88,10 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 						break
 					}
 					workerLogger.Debug().Msg("working")
+
+					// We don't want this metainfo to be a potentially huge payload, since we don't think push-messages
+					// should have huge payloads.
+					messageIn.Recipients = []string{userId}
 
 					// Skip error logging, callees did it with enough detail already
 					sendStatus, sendErrors := h.sendMessageToUserDevices(g.Request.Context(), &messageIn, userId)
