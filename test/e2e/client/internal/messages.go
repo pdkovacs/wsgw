@@ -47,7 +47,6 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		Sender:     msg.sender.Username,
 		Recipients: recips,
 		Data:       msg.text,
-		SentAt:     time.Now().String(),
 	}
 
 	message, marshalErr := json.Marshal(msgDto)
