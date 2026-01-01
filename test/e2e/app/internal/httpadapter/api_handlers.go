@@ -40,7 +40,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
 		h.metrics.messageRequestCounter.Add(g.Request.Context(), 1)
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS connect handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "api/messageHandler").Logger()
 
 		body, errReadBody := io.ReadAll(g.Request.Body)
 		if errReadBody != nil {

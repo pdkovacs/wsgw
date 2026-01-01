@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/pkgs/logging"
@@ -62,6 +63,16 @@ func initEndpoints(conf config.Config) *gin.Engine {
 		runContext, cancel := context.WithCancel(context.WithoutCancel(g.Request.Context()))
 		defer cancel()
 
+		logger := zerolog.Ctx(runContext).With().Logger()
+
+		userCountStr := g.Request.URL.Query().Get("user-count")
+		userCount, userCountConvErr := strconv.Atoi(userCountStr)
+		if userCountConvErr != nil {
+			logger.Error().Err(userCountConvErr).Msg("failed to convert query parameter 'user-count'")
+			g.AbortWithError(400, userCountConvErr)
+			return
+		}
+
 		testRunDone := make(chan struct{})
 		notifyDone := func() {
 			close(testRunDone)
@@ -71,8 +82,8 @@ func initEndpoints(conf config.Config) *gin.Engine {
 		runContext, span := tracer.Start(runContext, "test-run")
 		defer span.End()
 
-		run := newTestRun(notifyDone)
-		logger := zerolog.Ctx(runContext).With().Str("runId", run.runId).Logger()
+		run := newTestRun(userCount, notifyDone)
+		logger = logger.With().Str("runId", run.runId).Logger()
 		runContext = logger.WithContext(runContext)
 		run.createConnectRunClients(runContext, conf)
 

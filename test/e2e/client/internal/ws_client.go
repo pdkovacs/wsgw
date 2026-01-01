@@ -21,7 +21,7 @@ type wsClient struct {
 func newWSClient(wsgwUri string) *wsClient {
 	return &wsClient{
 		wsgwUri:        wsgwUri,
-		msgFromAppChan: make(chan string, 1000),
+		msgFromAppChan: make(chan string, 1024),
 	}
 }
 
