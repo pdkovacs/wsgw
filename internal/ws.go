@@ -51,7 +51,7 @@ var errConnectionNotFound = errors.New("connection not found")
 
 func newWsConnections() *wsConnections {
 	ns := &wsConnections{
-		connectionMessageBuffer: 16,
+		connectionMessageBuffer: 1024,
 		wsMap:                   make(map[ConnectionID]*connection),
 		logger:                  logging.Get().With().Str("unit", "notification-server").Logger(),
 	}
@@ -156,13 +156,13 @@ func (wsconns *wsConnections) deleteConnection(conn *connection) {
 
 // It never blocks and so messages to slow subscribers
 // are dropped.
-func (wsconns *wsConnections) push(ctx context.Context, msg string, connId ConnectionID) error {
+func (wsconns *wsConnections) push(_ context.Context, msg string, connId ConnectionID) error {
 	conn, connNotFoundErr := wsconns.getConnection(connId)
 	if connNotFoundErr != nil {
 		return connNotFoundErr
 	}
 
-	conn.publishLimiter.Wait(ctx)
+	// conn.publishLimiter.Wait(ctx)
 	conn.fromApp <- string(msg)
 
 	return nil

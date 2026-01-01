@@ -69,7 +69,7 @@ func (cli *client) connectAndListen(ctx context.Context) error {
 	return nil
 }
 
-func (cli *client) startTest(ctx context.Context, runId string, allUserNames []string) {
+func (cli *client) startTesting(ctx context.Context, runId string, allUserNames []string) {
 	msg := cli.createMessage(ctx, runId, allUserNames)
 	msg.sendMessage(ctx, cli.sendMessageApiUrl)
 }
@@ -130,7 +130,13 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 			attribute.KeyValue{Key: "destination", Value: attribute.StringValue(msgFromApp.Destination)},
 		),
 	)
-	defer deliverySpan.End()
+	var msgDone *Message
+	defer func() {
+		if msgDone != nil {
+			msgDone.span.End()
+		}
+		deliverySpan.End()
+	}()
 
 	logger = logger.With().Str("sender", msgFromApp.Sender).Logger()
 	msgInRepo := cli.outsandingMessages.get(msgFromApp.Id)
@@ -140,10 +146,7 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 		return
 	}
 
-	msgDone := cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username))
-	if msgDone != nil {
-		msgDone.span.End()
-	}
+	msgDone = cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username))
 
 	if msgInRepo.text != msgFromApp.Data {
 		cli.monitoring.incdMsgTextMismatchCounter(deliveryCtx)

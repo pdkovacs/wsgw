@@ -12,6 +12,7 @@ import (
 )
 
 type testRun struct {
+	userCount          int
 	runId              string
 	outsandingMessages *pendingDeliveryTracker
 	monitoring         *clientMonitoring
@@ -19,11 +20,12 @@ type testRun struct {
 	notifyCompleted    func()
 }
 
-func newTestRun(notifyCompleted func()) *testRun {
+func newTestRun(userCount int, notifyCompleted func()) *testRun {
 	runId := uuid.NewString()
 	monitoring := createMetrics(runId)
 
 	return &testRun{
+		userCount:          userCount,
 		runId:              runId,
 		outsandingMessages: newMessagesById(),
 		monitoring:         monitoring,
@@ -32,6 +34,11 @@ func newTestRun(notifyCompleted func()) *testRun {
 }
 
 func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Config) {
+	testUsers := conf.PasswordCredentials
+	if r.userCount > 0 {
+		testUsers = conf.PasswordCredentials[:r.userCount]
+	}
+
 	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "createConnectRunClients").Logger()
 
 	sendMessageApiUrl := fmt.Sprintf("%s%s", conf.AppServiceUrl, "/api/message")
@@ -40,7 +47,7 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 	allUserNames := []string{}
 	wg := sync.WaitGroup{}
 	mux := sync.RWMutex{}
-	for _, credentials := range conf.PasswordCredentials {
+	for _, credentials := range testUsers {
 		wg.Go(func() {
 			cli := newClient(credentials, conf.WsgwUri, sendMessageApiUrl, r.outsandingMessages, r.monitoring)
 			clientContext := zerolog.Ctx(ctx).With().Str("clientUser", credentials.Username).Logger().WithContext(ctx)
@@ -57,7 +64,7 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 	wg = sync.WaitGroup{}
 	for _, cli := range clients {
 		wg.Go(func() {
-			cli.startTest(ctx, r.runId, allUserNames)
+			cli.startTesting(ctx, r.runId, allUserNames)
 		})
 	}
 	wg.Wait()

@@ -68,7 +68,7 @@ func GetConfig(args []string) Config {
 		OtlpServiceNamespace:  k.String("OTLP_SERVICE_NAMESPACE"),
 		OtlpServiceName:       k.String("OTLP_SERVICE_NAME"),
 		OtlpServiceInstanceId: k.String("OTLP_SERVICE_INSTANCE_ID"),
-		OtlpTraceSampleAll:    k.Bool("OTLP_TRACE_SAMPLE_ALL"),
+		OtlpTraceSampleAll:    k.Bool("OtlpTraceSampleAll"),
 	}
 }
 

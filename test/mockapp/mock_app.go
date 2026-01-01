@@ -122,7 +122,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	ws := rootEngine.Group("/ws")
 
 	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS connect handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "handle-ws-connecting").Logger()
 		req := g.Request
 		res := g
 		cred, hasCredHeader := req.Header["Authorization"]
