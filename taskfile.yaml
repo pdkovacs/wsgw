@@ -76,6 +76,14 @@ tasks:
     cmds:
       - task: image
       - task: k8s-impl:single
+  image-k8s-all:
+    cmds:
+      - task: image
+      - task: k8s
+      - task: e2e:app:image
+      - task: e2e:k8s-impl:app
+      - task: e2e:client:image
+      - task: e2e:k8s-impl:client
   k8s-clustered:
     cmds:
       - task: image

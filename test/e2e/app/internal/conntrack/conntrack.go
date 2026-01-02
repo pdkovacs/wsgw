@@ -8,9 +8,9 @@ type WsConnections interface {
 	GetConnections(ctx context.Context, userId string) ([]string, error)
 }
 
-func NewWsgwConnectionTracker(dynamodbUrl string) (WsConnections, error) {
+func NewWsgwConnectionTracker(ctx context.Context, dynamodbUrl string) (WsConnections, error) {
 	if len(dynamodbUrl) == 0 {
 		return newUserWsgwConntracker(), nil
 	}
-	return NewDynamodbConntracker(dynamodbUrl)
+	return NewDynamodbConntracker(ctx, dynamodbUrl)
 }

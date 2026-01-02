@@ -7,16 +7,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"wsgw/internal/app_errors"
 	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
+	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
 	"wsgw/test/e2e/app/pgks/dto"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 )
 
 type APIHandler struct {
@@ -38,9 +41,14 @@ func newAPIHandler(
 
 func (h *APIHandler) messageHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
-		h.metrics.messageRequestCounter.Add(g.Request.Context(), 1)
+		// TODO: establish the request's own timeout from a query parameter
+		requestCtx := context.WithoutCancel(g.Request.Context())
+		h.metrics.messageRequestCounter.Add(requestCtx, 1)
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "api/messageHandler").Logger()
+		logger := zerolog.Ctx(requestCtx).With().Str(logging.MethodLogger, "api/messageHandler").Logger()
+		context.AfterFunc(requestCtx, func() {
+			logger.Debug().Err(context.Cause(requestCtx)).Str("stack", string(debug.Stack())).Msg("requestCtx canceled")
+		})
 
 		body, errReadBody := io.ReadAll(g.Request.Body)
 		if errReadBody != nil {
@@ -56,7 +64,12 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 			return
 		}
 
-		ctx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		ctx := monitoring.ExtractFromHeader(requestCtx, g.Request.Header)
+
+		tracer := otel.Tracer(config.OtelScope)
+		tmpCtx, handleMsgReqSpan := tracer.Start(ctx, "handle-send-message-request")
+		defer handleMsgReqSpan.End()
+		ctx = tmpCtx
 
 		logger = logger.With().Str("testRunId", messageIn.TestRunId).Str("messageId", messageIn.Id).Logger()
 
@@ -76,6 +89,10 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 
 		worker := func(id int) {
 			workerLogger := logger.With().Str("worker", fmt.Sprintf("messageHandlerWorker-%d", id)).Logger()
+			workerCtx := workerLogger.WithContext(ctx)
+			context.AfterFunc(ctx, func() {
+				workerLogger.Debug().Str("stack", string(debug.Stack())).Msg("worker context canceled")
+			})
 			keepOn := true
 
 			for keepOn {
@@ -93,7 +110,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 					messageIn.Recipients = []string{userId}
 
 					// Skip error logging, callees did it with enough detail already
-					sendStatus, sendErrors := h.sendMessageToUserDevices(ctx, &messageIn, userId)
+					sendStatus, sendErrors := h.sendMessageToUserDevices(workerCtx, &messageIn, userId)
 					if sendStatus != http.StatusNoContent {
 						status = sendStatus
 					}
@@ -101,7 +118,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 						err = errors.Join(err, sendErrors)
 					}
 					wgWorkUnits.Done()
-				case <-ctx.Done():
+				case <-workerCtx.Done():
 					workerLogger.Debug().Msg("ctx done")
 					keepOn = false
 				}
@@ -136,16 +153,24 @@ func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message *dto.
 
 	status := http.StatusNoContent
 
+	tracer := otel.Tracer(config.OtelScope)
+	tmpCtx, findDevicesSpan := tracer.Start(ctx, "find-user-devices")
+	ctx = tmpCtx
+
 	wsConnIds, err := h.wsConnections.GetConnections(ctx, userId)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to get wsgw connection-ids for user")
 		status = http.StatusInternalServerError
+
+		findDevicesSpan.End()
 		return status, errors.Join(nil, err)
 	}
 
 	if wsConnIds == nil {
 		logger.Info().Msg("user has no wsgw connection open")
 		status = http.StatusNotFound
+
+		findDevicesSpan.End()
 		return status, err
 	}
 
@@ -153,6 +178,9 @@ func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message *dto.
 		h.wsConnections.RemoveConnection(ctx, userId, connId)
 		h.metrics.staleWsConnIdCounter.Add(ctx, 1)
 	}
+
+	findDevicesSpan.End()
+
 	errProcessMessage := services.SendMessage(ctx, h.wsgwUrl, userId, message, wsConnIds, deleteConnId)
 
 	if errProcessMessage != nil {

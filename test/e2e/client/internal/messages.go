@@ -71,7 +71,7 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 	tracer := otel.Tracer(config.OtelScope)
 	ctx, msg.span = tracer.Start(
 		ctx,
-		"wsgw-e2e-test-client-initiate-messages",
+		"request-sending-message",
 		trace.WithAttributes(attribute.String("runId", msgDto.TestRunId)),
 	)
 	monitoring.InjectIntoHeader(ctx, req.Header)

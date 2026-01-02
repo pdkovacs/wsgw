@@ -23,6 +23,7 @@ type client struct {
 	sendMessageApiUrl  string
 	outsandingMessages *pendingDeliveryTracker
 	monitoring         *clientMonitoring
+	runId              string
 }
 
 func newClient(
@@ -31,6 +32,7 @@ func newClient(
 	sendMessageApiUrl string,
 	outsandingMessages *pendingDeliveryTracker,
 	monitoring *clientMonitoring,
+	runId string,
 ) *client {
 	ws := newWSClient(wsgwUri)
 	return &client{
@@ -39,13 +41,14 @@ func newClient(
 		outsandingMessages: outsandingMessages,
 		sendMessageApiUrl:  sendMessageApiUrl,
 		monitoring:         monitoring,
+		runId:              runId,
 	}
 }
 
 func (cli *client) connectAndListen(ctx context.Context) error {
 	logger := zerolog.Ctx(ctx).With().Str("user", cli.credentials.Username).Str(logging.UnitLogger, "connectAndListen").Logger()
 
-	_, connectErr := cli.ws.connect(ctx, cli.credentials.Username, cli.credentials.Password)
+	_, connectErr := cli.ws.connect(ctx, cli.runId, cli.credentials.Username, cli.credentials.Password)
 	if connectErr != nil {
 		logger.Error().Err(connectErr).Msg("failed to connect to test app")
 		return connectErr
@@ -58,8 +61,8 @@ func (cli *client) connectAndListen(ctx context.Context) error {
 			case msgFromApp := <-cli.ws.msgFromAppChan:
 				logger.Debug().Str("msgFromApp", msgFromApp).Msg("received from msgFromAppChan")
 				cli.processMsgFromApp(ctx, msgFromApp)
-			case <-time.After(50 * time.Duration(time.Second)):
-				logger.Debug().Msg("timeout")
+			case <-ctx.Done():
+				logger.Debug().Msg("context cancelled")
 				return
 			}
 		}
@@ -123,7 +126,7 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 	tracer := otel.Tracer(config.OtelScope)
 	deliveryCtx, deliverySpan := tracer.Start(
 		ctx,
-		"wsgw-e2e-test-client-received-message",
+		"client-received-message",
 		trace.WithAttributes(
 			attribute.String("runId", msgFromApp.TestRunId),
 			attribute.KeyValue{Key: "msgId", Value: attribute.StringValue(msgFromApp.Id)},

@@ -49,7 +49,7 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 	mux := sync.RWMutex{}
 	for _, credentials := range testUsers {
 		wg.Go(func() {
-			cli := newClient(credentials, conf.WsgwUri, sendMessageApiUrl, r.outsandingMessages, r.monitoring)
+			cli := newClient(credentials, conf.WsgwUri, sendMessageApiUrl, r.outsandingMessages, r.monitoring, r.runId)
 			clientContext := zerolog.Ctx(ctx).With().Str("clientUser", credentials.Username).Logger().WithContext(ctx)
 			cli.connectAndListen(clientContext)
 

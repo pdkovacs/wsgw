@@ -5,10 +5,13 @@ import (
 	"net/http"
 	wsgw "wsgw/internal"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
+	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 )
 
 type WSHandler struct {
@@ -27,9 +30,15 @@ func newWSHandler(
 
 func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
-		ws.metrics.connectRequestCounter.Add(g.Request.Context(), 1)
+		requestCtx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		tracer := otel.Tracer(config.OtelScope)
+		tmpCtx, span := tracer.Start(requestCtx, "new-ws-connection")
+		defer span.End()
+		requestCtx = tmpCtx
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
+		ws.metrics.connectRequestCounter.Add(requestCtx, 1)
+
+		logger := zerolog.Ctx(requestCtx).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
 		req := g.Request
 		res := g
 
@@ -44,7 +53,7 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			logger.Debug().Str("connid", connId).Msg("incoming connection request...")
 
-			addErr := wsConnections.AddConnection(g.Request.Context(), userSessionData.UserInfo.UserId, connId)
+			addErr := wsConnections.AddConnection(requestCtx, userSessionData.UserInfo.UserId, connId)
 			if addErr != nil {
 				res.Status(http.StatusInternalServerError)
 				return
@@ -61,6 +70,12 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 
 func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
+		tracer := otel.Tracer(config.OtelScope)
+		requestCtx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		tmpCtx, span := tracer.Start(requestCtx, "ws-disconnect")
+		defer span.End()
+		requestCtx = tmpCtx
+
 		ws.metrics.disconnectRequestCounter.Add(g.Request.Context(), 1)
 
 		logger0 := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
@@ -79,7 +94,7 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 			logger := logger0.With().Str("connid", connId).Logger()
 			logger.Debug().Msg("incoming disconnection request...")
 
-			if success, errRemoveConn := wsConnections.RemoveConnection(g.Request.Context(), userId, connId); !success || errRemoveConn != nil {
+			if success, errRemoveConn := wsConnections.RemoveConnection(requestCtx, userId, connId); !success || errRemoveConn != nil {
 				if errRemoveConn != nil {
 					logger.Error().Err(errRemoveConn).Msg("failed to remove connection")
 					g.Status(http.StatusInternalServerError)

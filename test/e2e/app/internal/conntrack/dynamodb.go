@@ -142,8 +142,8 @@ func (connmap *DyndbConntracker) GetConnections(ctx context.Context, userId stri
 	return connIds, err
 }
 
-func NewDynamodbConntracker(dynamodbUrl string) (*DyndbConntracker, error) {
-	client, err := newDynamodbClient(dynamodbUrl)
+func NewDynamodbConntracker(ctx context.Context, dynamodbUrl string) (*DyndbConntracker, error) {
+	client, err := newDynamodbClient(ctx, dynamodbUrl)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create dynamodb client for %s: %w", dynamodbUrl, err)
 	}

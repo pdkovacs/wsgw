@@ -27,26 +27,25 @@ var httpClient http.Client = http.Client{
 
 func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
 	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "SendMessage").Logger()
-	logger0.Debug().Str("recipient", userId).Any("message", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
+	logger0.Debug().Str("recipient", userId).Any("msg", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
 
 	var err error
 
 	tracer := otel.Tracer(config.OtelScope)
 	userCtx, userSpan := tracer.Start(
 		ctx,
-		"wsgw-e2e-test-app-initiate-user-message",
+		"send-message",
 		trace.WithAttributes(attribute.String("runId", message.TestRunId)),
 	)
 	defer userSpan.End()
 
 	for _, connId := range wsConnIds {
-		// "Multiplex" a single message
-		message.Destination = connId
-		message.SetSentAt()
+		url := fmt.Sprintf("%s%s/%s", wsgwUrl, wsgw.MessagePath, connId)
+		logger := logger0.With().Str("url", url).Logger()
 
 		deviceCtx, deviceSpan := tracer.Start(
 			userCtx,
-			"wsgw-e2e-test-app-initiate-userdevice-message",
+			"send-message-to-userdevice",
 			trace.WithAttributes(
 				attribute.String("runId", message.TestRunId),
 				attribute.String("msgId", message.Id),
@@ -54,9 +53,9 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 			),
 		)
 
-		url := fmt.Sprintf("%s%s/%s", wsgwUrl, wsgw.MessagePath, connId)
-		logger := logger0.With().Str("url", url).Logger()
-
+		// "Multiplex" a single message
+		message.Destination = connId
+		message.SetSentAt()
 		message.TraceData = monitoring.InjectTraceData(deviceCtx)
 
 		messageAsString, marshalErr := json.Marshal(message)
@@ -83,6 +82,8 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 		}
 
 		monitoring.InjectIntoHeader(deviceCtx, req.Header)
+
+		deviceSpan.AddEvent("sending-request")
 
 		response, sendReqErr := httpClient.Do(req)
 		if sendReqErr != nil {
@@ -114,6 +115,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 
 			continue
 		}
+		deviceSpan.AddEvent("request-sent")
 
 		deviceSpan.SetStatus(codes.Ok, "message sent to wsgw")
 		deviceSpan.End()
