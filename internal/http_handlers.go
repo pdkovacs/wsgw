@@ -72,7 +72,7 @@ var errAppConnAuthn = errors.New("authnError")
 var errAppConnAccepting = errors.New("appError")
 
 // Relays the connection request to the backend's `POST /ws/connect` endpoint and
-func handleClientConnecting(r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
+func handleClientConnecting(requestCtx context.Context, r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Str(logging.MethodLogger, "handleClientConnecting").Logger()
 
 	request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
@@ -85,6 +85,8 @@ func handleClientConnecting(r *http.Request, createConnectionId func(ctx context
 	connId := createConnectionId(r.Context())
 
 	request.Header.Add(ConnectionIDHeaderKey, string(connId))
+
+	monitoring.InjectIntoHeader(requestCtx, request.Header)
 
 	response, requestErr := httpClient.Do(request)
 	if requestErr != nil {
@@ -108,7 +110,7 @@ func handleClientConnecting(r *http.Request, createConnectionId func(ctx context
 	return &appConnection{connId, httpClient}, nil
 }
 
-func handleClientDisconnected(appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
+func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
 	logger = logger.With().Str(logging.MethodLogger, "handleClientDisconnected").Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 	logger.Debug().Msg("BEGIN")
@@ -120,6 +122,8 @@ func handleClientDisconnected(appUrls applicationURLs, connReqHeader http.Header
 	}
 	request.Header = connReqHeader
 	request.Header.Add(ConnectionIDHeaderKey, string(appConn.id))
+
+	monitoring.InjectIntoHeader(ctx, request.Header)
 
 	response, requestErr := appConn.httpClient.Do(request)
 	if requestErr != nil {
@@ -192,7 +196,14 @@ func connectHandler(
 	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
-		appConn, clientConnectErr := handleClientConnecting(g.Request, createConnectionId, appUrls)
+		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		tracer := otel.Tracer(config.OtelScope)
+		tmpCtx, span := tracer.Start(requestContext, "new-ws-connection")
+		requestContext = tmpCtx
+
+		appConn, clientConnectErr := handleClientConnecting(requestContext, g.Request, createConnectionId, appUrls)
+
+		span.End()
 
 		if clientConnectErr != nil {
 			switch clientConnectErr {
@@ -205,7 +216,7 @@ func connectHandler(
 			return
 		}
 
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "authentication handler").Str(ConnectionIDKey, string(appConn.id)).Logger()
+		logger := zerolog.Ctx(requestContext).With().Str(logging.MethodLogger, "authentication handler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 		// logger = logger.().Str(logging.MethodLogger, "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
@@ -220,12 +231,15 @@ func connectHandler(
 
 		var wsClosedError error
 		defer func() {
+			clientDisconnectCtx, clientDisconnectSpan := tracer.Start(requestContext, "new-ws-disconnect")
+			defer clientDisconnectSpan.End()
+
 			wsConn.Close(websocket.StatusNormalClosure, "")
 
-			handleClientDisconnected(appUrls, g.Request.Header, appConn, logger)
+			handleClientDisconnected(clientDisconnectCtx, appUrls, g.Request.Header, appConn, logger)
 
 			if clusterSupport != nil {
-				clusterSupport.deregisterConnection(g.Request.Context(), appConn.id)
+				clusterSupport.deregisterConnection(requestContext, appConn.id)
 			}
 
 			if wsClosedError != nil {
@@ -243,11 +257,11 @@ func connectHandler(
 		}()
 
 		if clusterSupport != nil {
-			clusterSupport.registerConnection(g.Request.Context(), appConn.id)
+			clusterSupport.registerConnection(requestContext, appConn.id)
 		}
 
 		if ackWithNewConnId {
-			ackErr := sendMessageToClient(g.Request.Context(), wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
+			ackErr := sendMessageToClient(requestContext, wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
 			if ackErr != nil {
 				logger.Error().Err(fmt.Errorf("failed to send connect ack: %v", ackErr))
 				wsClosedError = ackErr
@@ -257,7 +271,7 @@ func connectHandler(
 
 		logger.Debug().Msg("websocket message processing about to start...")
 
-		wsClosedError = ws.processMessages(g.Request.Context(), appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(appConn, appUrls)) // we block here until Error or Done
+		wsClosedError = ws.processMessages(requestContext, appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(appConn, appUrls)) // we block here until Error or Done
 
 		logger.Debug().Msgf("websocket message processing finished with %v", wsClosedError)
 	}
@@ -270,8 +284,9 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 
 		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
 		tracer := otel.Tracer(config.OtelScope)
-		tmpCtx, span := tracer.Start(requestContext, "msg-in-wsgw")
+		tmpCtx, span := tracer.Start(requestContext, "push-message")
 		defer span.End()
+		span.AddEvent("push-request-received")
 		requestContext = tmpCtx
 
 		connectionIdStr := g.Param(connIdPathParamName)
@@ -296,6 +311,8 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 
 		bodyAsString := string(requestBody)
 
+		span.AddEvent("pushing")
+
 		errPush := ws.push(requestContext, bodyAsString, ConnectionID(connectionIdStr))
 		if errPush == errConnectionNotFound {
 			if clusterSupport == nil {
@@ -312,6 +329,8 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			g.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
+
+		span.AddEvent("pushed")
 
 		g.Status(http.StatusNoContent)
 

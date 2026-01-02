@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func CreateStartServer(serverCtx context.Context, conf config.Config) error {
@@ -59,18 +60,36 @@ func initEndpoints(conf config.Config) *gin.Engine {
 
 	authorizedGroup := rootEngine.Group("/")
 	authorizedGroup.Use(authenticationCheck(conf))
-	authorizedGroup.POST("/run", func(g *gin.Context) {
-		runContext, cancel := context.WithCancel(context.WithoutCancel(g.Request.Context()))
-		defer cancel()
+	authorizedGroup.POST("/run", runTestHandler(conf))
+
+	return rootEngine
+}
+
+func runTestHandler(conf config.Config) func(g *gin.Context) {
+	return func(g *gin.Context) {
+		runContext, cancel := context.WithCancelCause(context.WithoutCancel(g.Request.Context()))
+		defer cancel(fmt.Errorf("The request handler is returning to its caller"))
 
 		logger := zerolog.Ctx(runContext).With().Logger()
 
 		userCountStr := g.Request.URL.Query().Get("user-count")
 		userCount, userCountConvErr := strconv.Atoi(userCountStr)
 		if userCountConvErr != nil {
-			logger.Error().Err(userCountConvErr).Msg("failed to convert query parameter 'user-count'")
+			logger.Error().Err(userCountConvErr).Str("userCountStr", userCountStr).Msg("failed to convert query parameter 'user-count'")
 			g.AbortWithError(400, userCountConvErr)
 			return
+		}
+
+		testRunTimeout := 20 * time.Minute
+		testRunTimeoutStr := g.Request.URL.Query().Get("timeout")
+		if len(testRunTimeoutStr) > 0 {
+			var testRunTimeoutConvErr error
+			testRunTimeout, testRunTimeoutConvErr = time.ParseDuration(testRunTimeoutStr)
+			if testRunTimeoutConvErr != nil {
+				logger.Error().Err(testRunTimeoutConvErr).Str("testRunTimeoutStr", testRunTimeoutStr).Msg("failed to convert query parameter 'timeout'")
+				g.AbortWithError(400, testRunTimeoutConvErr)
+				return
+			}
 		}
 
 		testRunDone := make(chan struct{})
@@ -79,12 +98,14 @@ func initEndpoints(conf config.Config) *gin.Engine {
 		}
 
 		tracer := otel.Tracer(config.OtelScope)
-		runContext, span := tracer.Start(runContext, "test-run")
+		tmpCtx, span := tracer.Start(runContext, "test-run")
+		runContext = tmpCtx
 		defer span.End()
 
 		run := newTestRun(userCount, notifyDone)
-		logger = logger.With().Str("runId", run.runId).Logger()
-		runContext = logger.WithContext(runContext)
+		span.SetAttributes(attribute.KeyValue{Key: "runId", Value: attribute.StringValue(run.runId)})
+		runContext = logger.With().Str("runId", run.runId).Logger().WithContext(runContext)
+
 		run.createConnectRunClients(runContext, conf)
 
 		g.JSON(http.StatusOK, map[string]string{"id": run.runId})
@@ -92,11 +113,9 @@ func initEndpoints(conf config.Config) *gin.Engine {
 		select {
 		case <-testRunDone:
 			logger.Debug().Bool("isContextAlive", runContext.Err() == nil).Msg("test-run done")
-		case <-time.After(60 * time.Second):
+		case <-time.After(testRunTimeout):
 			logger.Debug().Msg("had enough waiting")
 		}
 		logger.Debug().Msg("about to cancel test run context...")
-	})
-
-	return rootEngine
+	}
 }

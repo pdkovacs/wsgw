@@ -25,9 +25,10 @@ func ExtractTraceData(ctx context.Context, data map[string]string) context.Conte
 	return propagator.Extract(ctx, carrier)
 }
 
-func InjectIntoHeader(ctx context.Context, headers http.Header) {
+func InjectIntoHeader(ctx context.Context, headers http.Header) http.Header {
 	propagator := propagation.TraceContext{}
 	propagator.Inject(ctx, propagation.HeaderCarrier(headers))
+	return headers
 }
 
 func ExtractFromHeader(ctx context.Context, headers http.Header) context.Context {

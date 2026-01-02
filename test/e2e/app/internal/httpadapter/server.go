@@ -75,7 +75,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
 	userService := services.NewUserService()
 
-	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(conf.DynamodbURL)
+	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(ctx, conf.DynamodbURL)
 	if conntrackerErr != nil {
 		panic(fmt.Errorf("unable to create WSGW connection tracker %w", conntrackerErr))
 	}
@@ -207,8 +207,8 @@ func (s *server) start(serverCtx context.Context, portRequested int, r http.Hand
 	s.server = &http.Server{
 		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  0,
+		WriteTimeout: 0,
 	}
 
 	logger.Info().Msg("starting to serve...")

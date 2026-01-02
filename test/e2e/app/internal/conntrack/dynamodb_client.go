@@ -12,11 +12,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/smithy-go"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 )
 
 var errNotFound = errors.New("not found")
 
-func createAwsConfig(dynamodbUrl string) (aws.Config, error) {
+func createAwsConfig(ctx context.Context, dynamodbUrl string) (aws.Config, error) {
 
 	loadOptions := []func(*aws_config.LoadOptions) error{}
 
@@ -30,16 +31,18 @@ func createAwsConfig(dynamodbUrl string) (aws.Config, error) {
 		loadOptions = append(loadOptions, aws_config.WithBaseEndpoint(dynamodbUrl))
 	}
 
-	cfg, err := aws_config.LoadDefaultConfig(context.TODO(), loadOptions...)
+	cfg, err := aws_config.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 
+	otelaws.AppendMiddlewares(&cfg.APIOptions)
+
 	return cfg, nil
 }
 
-func newDynamodbClient(dynamodbUrl string) (*aws_dyndb.Client, error) {
-	awsConf, err := createAwsConfig(dynamodbUrl)
+func newDynamodbClient(ctx context.Context, dynamodbUrl string) (*aws_dyndb.Client, error) {
+	awsConf, err := createAwsConfig(ctx, dynamodbUrl)
 	if err != nil {
 		return nil, err
 	}

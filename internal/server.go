@@ -50,7 +50,7 @@ func (s *Server) SetupAndStart(serverCtx context.Context, configuration config.C
 // or by a service-mesh provider)
 // In the unlikely case of ex-machina control isn't available, OAuth2 client credentials flow could be easily supported.
 // (Use https://pkg.go.dev/github.com/golang-jwt/jwt/v4#example-package-GetTokenViaHTTP to verify the token.)
-func authenticateBackend(c *gin.Context) error {
+func authenticateBackend(_ *gin.Context) error {
 	return nil
 }
 
@@ -83,8 +83,8 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 	server := &http.Server{
 		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  0,
+		WriteTimeout: 0,
 	}
 
 	return server.Serve(listener)

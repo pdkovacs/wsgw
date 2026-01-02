@@ -8,9 +8,14 @@ import (
 	"net/http"
 	wsgw "wsgw/internal"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
+	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type wsClient struct {
@@ -25,10 +30,20 @@ func newWSClient(wsgwUri string) *wsClient {
 	}
 }
 
-func (cli *wsClient) connect(ctx context.Context, username string, password string) (*http.Response, error) {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "wsClient.connect").Logger()
-	dialOptions := createDialOptions(username, password)
-	conn, httpResponse, err := wsConnect(ctx, cli.wsgwUri, dialOptions)
+func (cli *wsClient) connect(ctx context.Context, runId string, username string, password string) (*http.Response, error) {
+	tracer := otel.Tracer(config.OtelScope)
+	connectCtx, connectSpan := tracer.Start(
+		ctx,
+		"new-ws-connection",
+		trace.WithAttributes(
+			attribute.String("runId", runId),
+		),
+	)
+	defer connectSpan.End()
+
+	logger := zerolog.Ctx(connectCtx).With().Str(logging.MethodLogger, "wsClient.connect").Logger()
+	dialOptions := createDialOptions(monitoring.InjectIntoHeader(connectCtx, http.Header{}), createBasicAuthnHeader(username, password))
+	conn, httpResponse, err := wsConnect(connectCtx, cli.wsgwUri, dialOptions)
 	if err != nil || httpResponse.StatusCode != http.StatusSwitchingProtocols {
 		logger.Error().Err(err).Int("httpStatus", httpResponse.StatusCode).Str("wsgwUri", cli.wsgwUri).Msg("failed to connect to wsgw")
 		return httpResponse, err
@@ -38,19 +53,19 @@ func (cli *wsClient) connect(ctx context.Context, username string, password stri
 		readFromAppLogger := logger.With().Str(logging.FunctionLogger, "readFromApp").Logger()
 		for {
 			readFromAppLogger.Debug().Msg("waiting for input on wsconn...")
-			msgType, msgFromApp, readErr := conn.Read(ctx)
+			msgType, msgFromApp, readErr := conn.Read(connectCtx)
 			if readErr != nil {
 				var closeError websocket.CloseError
 				if errors.As(readErr, &closeError) && closeError.Code == websocket.StatusNormalClosure {
 					readFromAppLogger.Debug().Msg("Client closed the connection normally")
 					return
 				}
-				readFromAppLogger.Error().Err(readErr).Msg("error while reading from websocket")
-				return
+				readFromAppLogger.Error().Err(readErr).Str("cccccccc", fmt.Sprintf("%#v", readErr)).Msg("error while reading from websocket")
+				continue
 			}
 			if msgType != websocket.MessageText {
 				readFromAppLogger.Error().Int("message-type", int(msgType)).Msg("unexpected message-type read from websocket")
-				return
+				continue
 			}
 			readFromAppLogger.Debug().Str("msgFromApp", string(msgFromApp)).Msg("writing to msgFromAppChan...")
 			cli.msgFromAppChan <- string(msgFromApp)
@@ -61,10 +76,17 @@ func (cli *wsClient) connect(ctx context.Context, username string, password stri
 	return httpResponse, nil
 }
 
-func createDialOptions(username string, password string) *websocket.DialOptions {
+func createDialOptions(headers ...http.Header) *websocket.DialOptions {
+	header := http.Header{}
+
+	for _, hrs := range headers {
+		for hn, vals := range hrs {
+			header.Add(hn, vals[0])
+		}
+	}
 
 	return &websocket.DialOptions{
-		HTTPHeader: createBasicAuthnHeader(username, password),
+		HTTPHeader: header,
 	}
 }
 
@@ -79,7 +101,7 @@ func wsConnect(ctx context.Context, wsgwUri string, connectOptions *websocket.Di
 	endpoint := fmt.Sprintf("ws://%s%s", wsgwUri, wsgw.ConnectPath)
 	conn, response, err := websocket.Dial(ctx, endpoint, connectOptions)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to dial %s: %w", endpoint, err)
+		return nil, response, fmt.Errorf("failed to dial %s: %w", endpoint, err)
 	}
 	return conn, response, err
 }
