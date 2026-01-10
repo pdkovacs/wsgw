@@ -46,22 +46,6 @@ Delivering
 
     ![alt text](image-1.png)
 
-While most of the individual deliveries completes in less than 1 second (and the bulk in less than half a second),
-which is kind of OK-ish for the targeted use-case,
-both test cases create a CPU load of about 15% on a good mid-range CPU (AMD Ryzen AI 7 350),
-which looks like "We could do better, couldn't we?". 😐
-
-The delivery time of just a couple of messages are in the microsecond scale (as expected) edging into the millisecond scale
-with tens and hundreds deliveries:
-
-![alt text](image-2.png)
-
-![alt text](image-3.png)
-
-![alt text](image-4.png)
-
-![alt text](image-5.png)
-
 ----
 
 Note

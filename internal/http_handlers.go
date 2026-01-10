@@ -75,7 +75,7 @@ var errAppConnAccepting = errors.New("appError")
 func handleClientConnecting(requestCtx context.Context, r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Str(logging.MethodLogger, "handleClientConnecting").Logger()
 
-	request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, appUrls.connecting(), nil)
 	if err != nil {
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return nil, errAppConnInternal
@@ -115,7 +115,7 @@ func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, conn
 
 	logger.Debug().Msg("BEGIN")
 
-	request, err := http.NewRequest(http.MethodPost, appUrls.disconnected(), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, appUrls.disconnected(), nil)
 	if err != nil {
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return
@@ -146,7 +146,7 @@ func handleClientMessage(appConn *appConnection, appUrls applicationURLs) func(c
 		logger := zerolog.Ctx(c).With().Str(ConnectionIDKey, string(appConn.id)).Str("func", "handleClientMessage").Logger()
 		logger.Debug().Str("msg", msg).Send()
 
-		request, err := http.NewRequest(
+		request, err := http.NewRequestWithContext(c,
 			http.MethodPost,
 			appUrls.message(),
 			bytes.NewReader([]byte(msg)),

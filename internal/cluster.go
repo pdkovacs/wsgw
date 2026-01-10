@@ -109,7 +109,7 @@ func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId Co
 		return portErr
 	}
 
-	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s://%s:%s/%s", protocol, connOwnerIpAddress, port, fmt.Sprintf("/message/%s", connectionId)), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s://%s:%s/%s", protocol, connOwnerIpAddress, port, fmt.Sprintf("/message/%s", connectionId)), nil)
 	if err != nil {
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return fmt.Errorf("failed to create request object: %w", err)
