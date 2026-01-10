@@ -127,3 +127,18 @@ func CreateHistogram(otelScope string, name string, description string, unit str
 
 	return histogram
 }
+
+func CreateGague(otelScope string, name string, description string, unit string) metric_api.Int64Gauge {
+	meter := otel.Meter(otelScope)
+
+	speedGauge, err := meter.Int64Gauge(
+		name,
+		metric_api.WithDescription(description),
+		metric_api.WithUnit(unit),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return speedGauge
+}
