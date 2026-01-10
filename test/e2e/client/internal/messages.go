@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	math_rand "math/rand"
 	"net/http"
 	"strings"
@@ -61,7 +62,7 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		logger.Error().Err(marshalErr).Msg("failed to marshal message")
 	}
 
-	req, createReqErr := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(string(message)))
+	req, createReqErr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(message)))
 	if createReqErr != nil {
 		logger.Error().Err(createReqErr).Msg("failed to create request")
 		return createReqErr
@@ -81,6 +82,10 @@ func (msg *Message) sendMessage(ctx context.Context, endpoint string) error {
 		logger.Error().Err(sendReqErr).Msgf("failed to send request: %#v", sendReqErr)
 		return sendReqErr
 	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+	}()
 
 	if response.StatusCode != http.StatusNoContent {
 		logger.Error().Str("endpoint", endpoint).Int("statusCode", response.StatusCode).Msg("failed to send request")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -70,7 +71,7 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 		}
 
 		logger.Debug().Msg("address to send to...")
-		req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(string(messageAsString)))
+		req, createReqErr := http.NewRequestWithContext(deviceCtx, http.MethodPost, url, strings.NewReader(string(messageAsString)))
 		if createReqErr != nil {
 			logger.Error().Err(createReqErr).Msg("failed to create request")
 
@@ -96,6 +97,10 @@ func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dt
 
 			continue
 		}
+		defer func() {
+			_, _ = io.Copy(io.Discard, response.Body)
+			response.Body.Close()
+		}()
 
 		if response.StatusCode != http.StatusNoContent {
 			if response.StatusCode == http.StatusNotFound {

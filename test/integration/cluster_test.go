@@ -111,7 +111,7 @@ func (s *clusterSupportTestSuite) TestReceiveAMessageFromApp() {
 
 			s.Len(s.mockApp.GetCalls(connId), 0)
 
-			err = s.mockApp.SendToClient(connId, toWsMessage(msgToReceive))
+			err = s.mockApp.SendToClient(ctx, connId, toWsMessage(msgToReceive))
 			s.NoError(err)
 
 			msgFromApp := <-msgFromAppChan
@@ -155,7 +155,7 @@ func (s *clusterSupportTestSuite) testSendReceiveMessagesFromApp(ctx context.Con
 		start := time.Now()
 
 		for msg := range msgsToReceive {
-			err = s.mockApp.SendToClient(connId, toWsMessage(msg))
+			err = s.mockApp.SendToClient(ctx, connId, toWsMessage(msg))
 			wg.Done()
 			s.NoError(err)
 		}

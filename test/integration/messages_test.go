@@ -89,7 +89,7 @@ func (s *sendMessageTestSuite) TestReceiveAMessageFromApp() {
 
 	s.Len(s.mockApp.GetCalls(connId), 0)
 
-	err = s.mockApp.SendToClient(connId, toWsMessage(msgToReceive))
+	err = s.mockApp.SendToClient(ctx, connId, toWsMessage(msgToReceive))
 	s.NoError(err)
 
 	msgFromApp := <-msgFromAppChan
@@ -129,7 +129,7 @@ func (s *sendMessageTestSuite) testSendReceiveMessagesFromApp(ctx context.Contex
 		start := time.Now()
 
 		for msg := range msgsToReceive {
-			err = s.mockApp.SendToClient(connId, toWsMessage(msg))
+			err = s.mockApp.SendToClient(ctx, connId, toWsMessage(msg))
 			wg.Done()
 			s.NoError(err)
 		}

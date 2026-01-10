@@ -31,7 +31,7 @@ type MockApp interface {
 	Start(ctx context.Context) error
 	GetAppAddress() string
 	Stop(ctx context.Context)
-	SendToClient(connId wsgw.ConnectionID, message MessageJSON) error
+	SendToClient(ctx context.Context, connId wsgw.ConnectionID, message MessageJSON) error
 	On(methodName string, connId wsgw.ConnectionID, arguments ...any)
 	ExpectConnDisconn(connId wsgw.ConnectionID)
 	GetCalls(connId wsgw.ConnectionID) []mock.Call
@@ -227,9 +227,9 @@ func (m *mockApplication) GetCalls(connId wsgw.ConnectionID) []mock.Call {
 	return m.connMocks[string(connId)].Calls
 }
 
-func (s *mockApplication) SendToClient(connId wsgw.ConnectionID, message MessageJSON) error {
+func (s *mockApplication) SendToClient(ctx context.Context, connId wsgw.ConnectionID, message MessageJSON) error {
 	url := fmt.Sprintf("%s%s/%s", s.getwsgwUrl(), wsgw.MessagePath, connId)
-	req, createReqErr := http.NewRequest(http.MethodPost, url, strings.NewReader(message["message"]))
+	req, createReqErr := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(message["message"]))
 	if createReqErr != nil {
 		return createReqErr
 	}
@@ -240,6 +240,10 @@ func (s *mockApplication) SendToClient(connId wsgw.ConnectionID, message Message
 	if sendReqErr != nil {
 		return sendReqErr
 	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+	}()
 
 	if response.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("sending message to client finished with unexpected HTTP status: %v", response.StatusCode)

@@ -17,28 +17,27 @@ spec:
         app: redis
     spec:
       containers:
-      - name: redis
-        image: redis:7.2.3
-        command:
-          - redis-server
-          - "/redis-master/redis.conf"
-        env:
-        - name: MASTER
-          value: "true"
-        ports:
-        - containerPort: 6379
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "200m"
-          limits:
-            memory: "1024Mi"
-            cpu: "500m"
-        volumeMounts:
-        - mountPath: /redis-master-data
-          name: data
-        - mountPath: /redis-master
-          name: config
+        - name: redis
+          image: redis:7.2.3
+          command:
+            - redis-server
+            - "/redis-master/redis.conf"
+          env:
+            - name: MASTER
+              value: "true"
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "1024Mi"
+          volumeMounts:
+            - mountPath: /redis-master-data
+              name: data
+            - mountPath: /redis-master
+              name: config
       volumes:
         - name: data
           emptyDir: {}
@@ -46,5 +45,5 @@ spec:
           configMap:
             name: redis-config
             items:
-            - key: redis-config
-              path: redis.conf
+              - key: redis-config
+                path: redis.conf

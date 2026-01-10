@@ -60,8 +60,12 @@ func (cli *wsClient) connect(ctx context.Context, runId string, username string,
 					readFromAppLogger.Debug().Msg("Client closed the connection normally")
 					return
 				}
-				readFromAppLogger.Error().Err(readErr).Str("cccccccc", fmt.Sprintf("%#v", readErr)).Msg("error while reading from websocket")
-				continue
+				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+					logger.Debug().Msg("context done while reading from websocket")
+					continue
+				}
+				readFromAppLogger.Error().Err(readErr).Msg("error while reading from websocket")
+				return
 			}
 			if msgType != websocket.MessageText {
 				readFromAppLogger.Error().Int("message-type", int(msgType)).Msg("unexpected message-type read from websocket")
