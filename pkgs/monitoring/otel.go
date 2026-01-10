@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/metric"
 	metric_api "go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -126,4 +127,45 @@ func CreateHistogram(otelScope string, name string, description string, unit str
 	}
 
 	return histogram
+}
+
+func CreateGague(otelScope string, name string, description string, unit string) metric_api.Int64Gauge {
+	meter := otel.Meter(otelScope)
+
+	speedGauge, err := meter.Int64Gauge(
+		name,
+		metric_api.WithDescription(description),
+		metric_api.WithUnit(unit),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return speedGauge
+}
+
+func CreateUpDownCounter(otelScope string, name string, description string, unit string) metric_api.Int64UpDownCounter {
+	meter := otel.Meter(otelScope)
+
+	speedGauge, err := meter.Int64UpDownCounter(
+		name,
+		metric_api.WithDescription(description),
+		metric_api.WithUnit(unit),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return speedGauge
+}
+
+func TrackInFlight(ctx context.Context, inflightGauge metric_api.Int64UpDownCounter, spanName string, fn func(context.Context) error) error {
+	inflightGauge.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("span.name", spanName),
+	))
+	defer inflightGauge.Add(ctx, -1, metric.WithAttributes(
+		attribute.String("span.name", spanName),
+	))
+
+	return fn(ctx)
 }
