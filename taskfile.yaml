@@ -36,7 +36,7 @@ tasks:
       - echo "APPLICATION=WebSocket Gateway" > internal/config/version_data.txt
       - echo VERSION=0.0.1 >> internal/config/version_data.txt
       - printf "TIME=" >> internal/config/version_data.txt
-      - date +%Y-%m-%dT%H:%M:%S%z >> internal/config/version_data.txt
+      - echo {{now}} >> internal/config/version_data.txt
       - printf "COMMIT=" >> internal/config/version_data.txt
       - git rev-parse HEAD >> internal/config/version_data.txt
   build:
@@ -45,7 +45,7 @@ tasks:
       - |
         echo "GOOS {{.GOOS}} GOARCH {{.GOARCH}}"
         cd cmd
-        env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.EXECUTABLE}}
+        GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o {{.EXECUTABLE}}
     sources:
       - ./cmd/**/*
       - ./internal/**/*
