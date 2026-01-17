@@ -29,7 +29,7 @@ This is really just for sanity testing the setup of multiple test-app instances
 
 Delivering 
 
-* 128 messages to 12k destinations in total takes about 34 seconds
+* 128 messages to 12k destinations in total takes about 3 seconds
 
     ```
     time curl -i -u 'user1:crixcrax1' -X POST 'http://wsgw-e2e-client.internal/run?timeout=5m&user-count=128'
@@ -37,7 +37,7 @@ Delivering
 
     ![alt text](image.png)
 
-* 256 messages to 49k destinations in total takes about 1 minute 55 seconds
+* 256 messages to 47k destinations in total takes about 1 minute 10 seconds
 
     ```
     time curl -i -u 'user1:crixcrax1' -X POST 'http://wsgw-e2e-client.internal/run?timeout=5m&user-count=256'
@@ -45,6 +45,8 @@ Delivering
     ```
 
     ![alt text](image-1.png)
+
+* 512 messages to 195k destinations never finishes — with only about 90k deliveried
 
 ----
 

@@ -44,10 +44,9 @@ spec:
               value: "e2e-client"
           resources:
             requests:
-              memory: "30M"
-              cpu: "3000m"
-            limits:
               memory: "500M"
+            limits:
+              memory: "5G"
 ---
 apiVersion: v1
 kind: Service
