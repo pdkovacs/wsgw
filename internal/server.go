@@ -96,7 +96,7 @@ func (s *Server) Stop(ctx context.Context) error {
 	logger.Info().Msgf("Shutting down server...")
 	shutdownErr := s.server.Shutdown(ctx)
 	if shutdownErr != nil {
-		logger.Error().Msgf("Error while shutting down server: %v", shutdownErr)
+		logger.Error().Err(shutdownErr).Msgf("Error while shutting down server")
 	} else {
 		logger.Info().Msg("Server shutdown successfully")
 	}

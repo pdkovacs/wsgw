@@ -77,7 +77,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 
 	request, err := http.NewRequest(http.MethodGet, appUrls.connecting(), nil)
 	if err != nil {
-		logger.Error().Msgf("failed to create request object: %v", err)
+		logger.Error().Err(err).Msgf("failed to create request object")
 		return nil, errAppConnInternal
 	}
 	request.Header = r.Header
@@ -90,7 +90,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 
 	response, requestErr := httpClient.Do(request)
 	if requestErr != nil {
-		logger.Error().Msgf("failed to send request: %v", requestErr)
+		logger.Error().Err(requestErr).Msgf("failed to send request")
 		return nil, errAppConnInternal
 	}
 	defer cleanupResponse(response)
@@ -117,7 +117,7 @@ func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, conn
 
 	request, err := http.NewRequest(http.MethodPost, appUrls.disconnected(), nil)
 	if err != nil {
-		logger.Error().Msgf("failed to create request object: %v", err)
+		logger.Error().Err(err).Msgf("failed to create request object")
 		return
 	}
 	request.Header = connReqHeader
@@ -127,7 +127,7 @@ func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, conn
 
 	response, requestErr := appConn.httpClient.Do(request)
 	if requestErr != nil {
-		logger.Error().Msgf("failed to send request: %v", requestErr)
+		logger.Error().Err(requestErr).Msgf("failed to send request")
 		return
 	}
 	defer cleanupResponse(response)
@@ -152,14 +152,14 @@ func handleClientMessage(appConn *appConnection, appUrls applicationURLs) func(c
 			bytes.NewReader([]byte(msg)),
 		)
 		if err != nil {
-			logger.Error().Msgf("failed to create request object: %v", err)
+			logger.Error().Err(err).Msgf("failed to create request object")
 			return err
 		}
 		request.Header.Add(ConnectionIDHeaderKey, string(appConn.id))
 
 		response, requestErr := appConn.httpClient.Do(request)
 		if requestErr != nil {
-			logger.Error().Msgf("failed to send request: %v", requestErr)
+			logger.Error().Err(requestErr).Msgf("failed to send request")
 			return requestErr
 		}
 		defer cleanupResponse(response)
@@ -224,7 +224,7 @@ func connectHandler(
 			OriginPatterns: []string{loadBalancerAddress},
 		})
 		if subsErr != nil {
-			logger.Error().Msgf("failed to accept ws connection request: %v", subsErr)
+			logger.Error().Err(subsErr).Msgf("failed to accept ws connection request")
 			_ = g.Error(subsErr)
 			return
 		}
@@ -252,7 +252,7 @@ func connectHandler(
 					return
 				}
 
-				logger.Error().Msgf("%v", wsClosedError)
+				logger.Error().Err(wsClosedError).Send()
 			}
 		}()
 
@@ -303,7 +303,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 		requestBody, errReadRequest := io.ReadAll(g.Request.Body)
 		g.Request.Body.Close()
 		if errReadRequest != nil {
-			logger.Error().Msgf("failed to read request body %T: %v", g.Request.Body, errReadRequest)
+			logger.Error().Err(errReadRequest).Msgf("failed to read request body %T", g.Request.Body)
 			g.JSON(http.StatusInternalServerError, nil)
 			return
 		}
@@ -323,9 +323,8 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...", connectionIdStr)
 			errPush = clusterSupport.relayMessage(requestContext, ConnectionID(connectionIdStr), bodyAsString)
 		}
-
 		if errPush != nil {
-			logger.Error().Msgf("Failed to push to connection %s: %v", connectionIdStr, errPush)
+			logger.Error().Err(errPush).Str("connectionIdStr", connectionIdStr).Msgf("failed to push to connection")
 			g.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}

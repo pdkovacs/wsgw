@@ -111,7 +111,7 @@ func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId Co
 
 	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s://%s:%s/%s", protocol, connOwnerIpAddress, port, fmt.Sprintf("/message/%s", connectionId)), nil)
 	if err != nil {
-		logger.Error().Msgf("failed to create request object: %v", err)
+		logger.Error().Err(err).Msgf("failed to create request object")
 		return fmt.Errorf("failed to create request object: %w", err)
 	}
 
@@ -120,7 +120,7 @@ func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId Co
 	}
 	response, requestErr := client.Do(request)
 	if requestErr != nil {
-		logger.Error().Msgf("failed to send request: %v", requestErr)
+		logger.Error().Err(requestErr).Msgf("failed to send request")
 		return fmt.Errorf("failed to send request: %w", requestErr)
 	}
 	defer cleanupResponse(response)
