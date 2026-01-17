@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 	"wsgw/internal/config"
+	loadmanagement "wsgw/pkgs/loadmanegement"
 	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 
@@ -314,6 +315,12 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 		span.AddEvent("pushing")
 
 		errPush := ws.push(requestContext, bodyAsString, ConnectionID(connectionIdStr))
+		var oload *loadmanagement.OverloadError
+		if errors.As(errPush, &oload) {
+			logger.Error().Err(errPush).Str("connectionIdStr", connectionIdStr).Msgf("failed to push to connection")
+			g.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
 		if errPush == errConnectionNotFound {
 			if clusterSupport == nil {
 				logger.Info().Msg("ws connection not found")

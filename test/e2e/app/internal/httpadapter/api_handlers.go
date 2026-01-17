@@ -41,6 +41,7 @@ func newAPIHandler(
 
 func (h *APIHandler) messageHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
+		// TODO: Maybe use some concurrency budget
 		// TODO: establish the request's own timeout from a query parameter
 		requestCtx := context.WithoutCancel(g.Request.Context())
 		h.metrics.messageRequestCounter.Add(requestCtx, 1)

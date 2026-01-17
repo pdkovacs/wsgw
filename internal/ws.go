@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	loadmanagement "wsgw/pkgs/loadmanegement"
 	"wsgw/pkgs/logging"
 
 	"github.com/coder/websocket"
@@ -163,6 +164,9 @@ func (wsconns *wsConnections) push(_ context.Context, msg string, connId Connect
 	}
 
 	// conn.publishLimiter.Wait(ctx)
+	if len(conn.fromApp) >= cap(conn.fromApp) {
+		return loadmanagement.OverloadError{Reason: "fromApp channel full"}
+	}
 	conn.fromApp <- string(msg)
 
 	return nil
