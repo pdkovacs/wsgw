@@ -77,3 +77,16 @@ spec:
         - name: dynamodb
           persistentVolumeClaim:
             claimName: dynamodb-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamodb-local
+  labels:
+    app: dynamodb-local
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8000
+  selector:
+    app: dynamodb-local

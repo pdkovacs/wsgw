@@ -33,7 +33,8 @@ tasks:
         echo "==== Rescaling wsgw-e2e-app, maybe...."
         app_scale="{{.E2EAPP_SCALE}}"
         if [ -z "$app_scale" ]; then
-          echo "E2EAPP_SCALE not set; using default scale for wsgw-e2e-app"
+          echo "E2EAPP_SCALE not set; redploying wsgw-e2e-app with the current scale..."
+          kubectl rollout restart deployment wsgw-e2e-app
         else
           echo "Rescaling wsgw-e2e-app to $app_scale"
           kubectl scale deployment wsgw-e2e-app --replicas 0
@@ -48,7 +49,8 @@ tasks:
         echo "==== Rescaling wsgw-e2e-client, maybe...."
         client_scale="{{.E2ECLIENT_SCALE}}"
         if [ -z "$client_scale" ]; then
-          echo "E2ECLIENT_SCALE not set; using default scale for wsgw-e2e-client"
+          echo "E2ECLIENT_SCALE not set; redploying wsgw-e2e-client with the current scale..."
+          kubectl rollout restart deployment wsgw-e2e-client
         else
           echo "Rescaling wsgw-e2e-client to $client_scale"
           kubectl scale deployment wsgw-e2e-client --replicas 0

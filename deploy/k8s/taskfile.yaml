@@ -15,8 +15,7 @@ tasks:
     cmds:
       - kubectl apply -f wsgw-deployment.yaml
       - kubectl apply -f wsgw-service.yaml
-      - kubectl scale deployment wsgw --replicas 0
-      - kubectl scale deployment wsgw --replicas 1
+      - kubectl rollout restart deployment wsgw
   clustered:
     cmds:
       - task: single

@@ -34,7 +34,7 @@ spec:
             - name: WSGW_APP_BASE_URL
               value: "http://wsgw-e2e-app:8080"
             - name: WSGW_OTLP_ENDPOINT
-              value: http://alloy.my-grafana.svc.cluster.local:4318
+              value: http://alloy.monitoring.svc.cluster.local:4318
             - name: WSGW_OTLP_SERVICE_NAMESPACE
               value: "bitkit/wsgw"
             - name: WSGW_OTLP_SERVICE_NAME

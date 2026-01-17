@@ -1,5 +1,5 @@
 locals {
-  dynamodb_url = "http://dynamodb-k8s:8000"
+  dynamodb_url = "http://dynamodb-local:8000"
 }
 
 provider "aws" {

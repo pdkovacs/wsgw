@@ -37,7 +37,7 @@ spec:
             - name: E2ECLIENT_DEV_LOG_FILE
               value: "{{.DEV_LOG_FILE}}"
             - name: E2ECLIENT_OTLP_ENDPOINT
-              value: http://alloy.my-grafana.svc.cluster.local:4318
+              value: http://alloy.monitoring.svc.cluster.local:4318
             - name: E2ECLIENT_OTLP_SERVICE_NAMESPACE
               value: "bitkit/wsgw"
             - name: E2ECLIENT_OTLP_SERVICE_NAME
