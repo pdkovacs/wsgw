@@ -132,6 +132,9 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 
 		logger.Debug().Int("numRecipients", len(messageIn.Recipients)).Int("numWorkers", numWorkers).Msg("feeding workers")
 		for _, userId := range messageIn.Recipients {
+			if cap(userIdQueue) <= len(userIdQueue)+1 {
+				logger.Warn().Msg("userIdQueue at full capacity")
+			}
 			userIdQueue <- string(userId)
 		}
 		logger.Debug().Msg("waiting for all recipients to be processed...")
@@ -145,6 +148,7 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 			return
 		}
 
+		logger.Error().Err(err).Msg("failed to send message")
 		g.AbortWithStatusJSON(status, err.Error())
 	}
 }

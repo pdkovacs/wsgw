@@ -26,7 +26,7 @@ type wsClient struct {
 func newWSClient(wsgwUri string) *wsClient {
 	return &wsClient{
 		wsgwUri:        wsgwUri,
-		msgFromAppChan: make(chan string, 1024),
+		msgFromAppChan: make(chan string, 1024*1024),
 	}
 }
 
@@ -72,6 +72,9 @@ func (cli *wsClient) connect(ctx context.Context, runId string, username string,
 				continue
 			}
 			readFromAppLogger.Debug().Str("msgFromApp", string(msgFromApp)).Msg("writing to msgFromAppChan...")
+			if cap(cli.msgFromAppChan) <= len(cli.msgFromAppChan)+1 {
+				logger.Warn().Msg("msgFromAppChan at full capacity")
+			}
 			cli.msgFromAppChan <- string(msgFromApp)
 			readFromAppLogger.Debug().Str("msgFromApp", string(msgFromApp)).Msg("msgFromAppChan written to")
 		}
