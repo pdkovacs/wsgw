@@ -209,6 +209,7 @@ func (s *server) start(serverCtx context.Context, portRequested int, r http.Hand
 		Handler:      r,
 		ReadTimeout:  0,
 		WriteTimeout: 0,
+		IdleTimeout:  90 * time.Second,
 	}
 
 	logger.Info().Msg("starting to serve...")

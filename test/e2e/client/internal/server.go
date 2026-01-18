@@ -42,6 +42,7 @@ func CreateStartServer(serverCtx context.Context, conf config.Config) error {
 		Handler:      r,
 		ReadTimeout:  0,
 		WriteTimeout: 0,
+		IdleTimeout:  90 * time.Second,
 	}
 
 	logger.Info().Msg("starting to serve...")

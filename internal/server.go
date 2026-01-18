@@ -85,6 +85,7 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 		Handler:      r,
 		ReadTimeout:  0,
 		WriteTimeout: 0,
+		IdleTimeout:  90 * time.Second,
 	}
 
 	return server.Serve(listener)
