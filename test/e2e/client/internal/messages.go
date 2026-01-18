@@ -22,7 +22,13 @@ import (
 )
 
 var httpClient http.Client = http.Client{
-	Timeout: time.Second * 15,
+	// This is a little long here, but don't forget: this is only used to tell app
+	// what websocket messages we expect it to generate. As part of simulating
+	// the need for messages, the generation of the specific test messages is outsourced
+	// to e2e-test-client (this service). In real-life usage of WSGS, the won't be
+	// any HTTP requests like this, because the need for message will arise in the app
+	// itself and the app will generate the messages itself.
+	Timeout: 5 * time.Minute,
 }
 
 type recipientName string
