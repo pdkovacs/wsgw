@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/client/internal/config"
 
@@ -22,7 +21,7 @@ func CreateStartServer(serverCtx context.Context, conf config.Config) error {
 	portRequested := conf.ServerPort
 	r := initEndpoints(conf)
 
-	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "StartServer").Logger()
+	logger := zerolog.Ctx(serverCtx).With().Logger()
 	logger.Info().Msg("Starting listener....")
 
 	lstnr, lstnrErr := net.Listen("tcp", fmt.Sprintf(":%d", portRequested))
@@ -73,12 +72,38 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 
 		logger := zerolog.Ctx(runContext).With().Logger()
 
+		userCount := 32
 		userCountStr := g.Request.URL.Query().Get("user-count")
-		userCount, userCountConvErr := strconv.Atoi(userCountStr)
-		if userCountConvErr != nil {
-			logger.Error().Err(userCountConvErr).Str("userCountStr", userCountStr).Msg("failed to convert query parameter 'user-count'")
-			g.AbortWithError(400, userCountConvErr)
-			return
+		if len(userCountStr) > 0 {
+			var userCountConvErr error
+			userCount, userCountConvErr = strconv.Atoi(userCountStr)
+			if userCountConvErr != nil {
+				logger.Error().Err(userCountConvErr).Str("userCountStr", userCountStr).Msg("failed to convert query parameter 'user-count'")
+				g.AbortWithError(400, userCountConvErr)
+				return
+			}
+			if userCount < 1 {
+				logger.Error().Int("userCount", userCount).Msg("'user-count' must be greater than 1")
+				g.AbortWithStatus(400)
+				return
+			}
+		}
+
+		testDataPartionCount := 1
+		testDataPartionCountStr := g.Request.URL.Query().Get("testdata-partion-count")
+		if len(testDataPartionCountStr) > 0 {
+			var testDataPartionCountConvErr error
+			testDataPartionCount, testDataPartionCountConvErr = strconv.Atoi(testDataPartionCountStr)
+			if testDataPartionCountConvErr != nil {
+				logger.Error().Err(testDataPartionCountConvErr).Str("testDataPartionCountStr", testDataPartionCountStr).Msg("failed to convert query parameter 'testdata-partion-count'")
+				g.AbortWithError(400, testDataPartionCountConvErr)
+				return
+			}
+			if testDataPartionCount < 1 {
+				logger.Error().Int("testDataPartionCount", testDataPartionCount).Msg("'testdata-partion-count' must be greater than 1")
+				g.AbortWithStatus(400)
+				return
+			}
 		}
 
 		testRunTimeout := 20 * time.Minute
@@ -103,7 +128,7 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		runContext = tmpCtx
 		defer span.End()
 
-		run := newTestRun(userCount, notifyDone)
+		run := newTestRun(userCount, testDataPartionCount, notifyDone)
 		span.SetAttributes(attribute.KeyValue{Key: "runId", Value: attribute.StringValue(run.runId)})
 		runContext = logger.With().Str("runId", run.runId).Logger().WithContext(runContext)
 

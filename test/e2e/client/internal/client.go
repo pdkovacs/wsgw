@@ -6,7 +6,6 @@ import (
 	"fmt"
 	math_rand "math/rand"
 	"time"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/client/internal/config"
 
@@ -20,8 +19,7 @@ import (
 type client struct {
 	credentials        config.PasswordCredentials
 	ws                 *wsClient // currently used only for receiving push messages
-	sendMessageApiUrl  string
-	outsandingMessages *pendingDeliveryTracker
+	outsandingMessages *deliveryTracker
 	monitoring         *clientMonitoring
 	runId              string
 }
@@ -29,8 +27,7 @@ type client struct {
 func newClient(
 	credentials config.PasswordCredentials,
 	wsgwUri string,
-	sendMessageApiUrl string,
-	outsandingMessages *pendingDeliveryTracker,
+	outsandingMessages *deliveryTracker,
 	monitoring *clientMonitoring,
 	runId string,
 ) *client {
@@ -39,14 +36,13 @@ func newClient(
 		credentials:        credentials,
 		ws:                 ws,
 		outsandingMessages: outsandingMessages,
-		sendMessageApiUrl:  sendMessageApiUrl,
 		monitoring:         monitoring,
 		runId:              runId,
 	}
 }
 
 func (cli *client) connectAndListen(ctx context.Context) error {
-	logger := zerolog.Ctx(ctx).With().Str("user", cli.credentials.Username).Str(logging.UnitLogger, "connectAndListen").Logger()
+	logger := zerolog.Ctx(ctx).With().Str("user", cli.credentials.Username).Logger()
 
 	_, connectErr := cli.ws.connect(ctx, cli.runId, cli.credentials.Username, cli.credentials.Password)
 	if connectErr != nil {
@@ -72,12 +68,7 @@ func (cli *client) connectAndListen(ctx context.Context) error {
 	return nil
 }
 
-func (cli *client) startTesting(ctx context.Context, runId string, allUserNames []string) {
-	msg := cli.createMessage(ctx, runId, allUserNames)
-	msg.sendMessage(ctx, cli.sendMessageApiUrl)
-}
-
-func (cli *client) createMessage(ctx context.Context, runId string, recipientCandidates []string) *Message {
+func (cli *client) createMessage(ctx context.Context, recipientCandidates []string) *message {
 	recipientCount := len(recipientCandidates)
 	if recipientCount > 10 {
 		recipientCount = math_rand.Intn(len(recipientCandidates)/2-1) + len(recipientCandidates)/2
@@ -92,8 +83,8 @@ func (cli *client) createMessage(ctx context.Context, runId string, recipientCan
 		convertedRecipId = append(convertedRecipId, recipientName(recip))
 	}
 
-	msg := &Message{
-		testRunId:  runId,
+	msg := &message{
+		testRunId:  cli.runId,
 		id:         msgId,
 		sentAt:     time.Now(),
 		sender:     cli.credentials,
@@ -101,7 +92,6 @@ func (cli *client) createMessage(ctx context.Context, runId string, recipientCan
 		text:       fmt.Sprintf("[%s] %s", msgId, "a test message"),
 	}
 
-	cli.outsandingMessages.addPending(msg)
 	cli.monitoring.incMsgCreatedCounter(ctx)
 
 	return msg
@@ -110,7 +100,7 @@ func (cli *client) createMessage(ctx context.Context, runId string, recipientCan
 func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) {
 	receivedAt := time.Now()
 
-	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "processMsgFromApp").Logger()
+	logger := zerolog.Ctx(ctx).With().Logger()
 	logger.Debug().Str("msgFromAppStr", msgFromAppStr).Msg("BEGIN")
 
 	msgFromApp, parseErr := parseMsg(msgFromAppStr)
@@ -133,7 +123,7 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 			attribute.KeyValue{Key: "destination", Value: attribute.StringValue(msgFromApp.Destination)},
 		),
 	)
-	var msgDone *Message
+	var msgDone *message
 	defer func() {
 		if msgDone != nil {
 			msgDone.span.End()

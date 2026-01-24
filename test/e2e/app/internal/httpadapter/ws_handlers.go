@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
@@ -38,7 +37,7 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 
 		ws.metrics.connectRequestCounter.Add(requestCtx, 1)
 
-		logger := zerolog.Ctx(requestCtx).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
+		logger := zerolog.Ctx(requestCtx).With().Logger()
 		req := g.Request
 		res := g
 
@@ -78,7 +77,7 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 
 		ws.metrics.disconnectRequestCounter.Add(g.Request.Context(), 1)
 
-		logger0 := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "connectWsHandler").Logger()
+		logger0 := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 
 		userSessionData, ok := getSessionDataFromSession(g, &logger0)
@@ -113,7 +112,7 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 
 func messageWsHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS message handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {

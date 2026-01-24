@@ -3,7 +3,6 @@ package httpadapter
 import (
 	"fmt"
 	"net/http"
-	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/security/authn"
 	"wsgw/test/e2e/app/internal/services"
@@ -15,7 +14,7 @@ import (
 
 func userListHandler(userService services.UserService, passwordCreds []config.PasswordCredentials) func(c *gin.Context) {
 	return func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.FunctionLogger, "userListHandler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 
 		users, err := userService.GetUsers(g, passwordCreds)
 		if err != nil {

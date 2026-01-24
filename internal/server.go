@@ -56,7 +56,7 @@ func authenticateBackend(_ *gin.Context) error {
 
 // start starts the service
 func (s *Server) start(serverCtx context.Context, configuration config.Config, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
-	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "start").Logger()
+	logger := zerolog.Ctx(serverCtx).With().Logger()
 
 	endpoint := fmt.Sprintf("%s:%d", configuration.ServerHost, configuration.ServerPort)
 	listener, err := net.Listen("tcp", endpoint)
@@ -93,7 +93,7 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 
 // Stop kills the listener
 func (s *Server) Stop(ctx context.Context) error {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "stop").Logger()
+	logger := zerolog.Ctx(ctx).With().Logger()
 	logger.Info().Msgf("Shutting down server...")
 	shutdownErr := s.server.Shutdown(ctx)
 	if shutdownErr != nil {

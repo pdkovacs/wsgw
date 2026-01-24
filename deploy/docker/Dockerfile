@@ -5,7 +5,7 @@ LABEL Version="1.0.0"
 
 RUN useradd -m --shell /bin/false wsgw
 
-RUN apt-get update && apt-get install -y git curl && apt-get clean
+RUN apt-get update && apt-get install -y git curl iproute2 && apt-get clean
 RUN mkdir -p /opt/wsgw
 WORKDIR /opt/wsgw
 COPY wsgw ./

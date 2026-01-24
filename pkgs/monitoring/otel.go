@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"time"
 	"wsgw/internal/config"
-	"wsgw/pkgs/logging"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -30,7 +29,7 @@ type OtelConfig struct {
 }
 
 func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
-	logger := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "InitOtel").Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
 
 	if len(conf.OtlpEndpoint) == 0 {
 		logger.Info().Msg("No OTLP endpoint, skipping...")

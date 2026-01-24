@@ -25,7 +25,7 @@ func main() {
 	)
 	defer cancelRequests()
 
-	logger := logging.Get().With().Str(logging.UnitLogger, "main").Logger()
+	logger := logging.Get().With().Logger()
 	ctx = logger.WithContext(ctx)
 
 	var serverWanted bool = true

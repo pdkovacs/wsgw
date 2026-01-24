@@ -49,7 +49,7 @@ func (s *baseTestSuite) SetupSuite() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	s.cancel = stop
 
-	logger := logging.Get().With().Str(logging.MethodLogger, "SetupSuite").Logger()
+	logger := logging.Get().With().Logger()
 	s.ctx = logger.WithContext(ctx)
 
 	logger.Info().Msg("BEGIN")

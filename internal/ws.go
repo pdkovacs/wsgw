@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 	loadmanagement "wsgw/pkgs/loadmanegement"
-	"wsgw/pkgs/logging"
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
@@ -54,7 +53,6 @@ func newWsConnections() *wsConnections {
 	ns := &wsConnections{
 		connectionMessageBuffer: 1024,
 		wsMap:                   make(map[ConnectionID]*connection),
-		logger:                  logging.Get().With().Str("unit", "notification-server").Logger(),
 	}
 
 	return ns
@@ -74,7 +72,7 @@ func (wsconns *wsConnections) processMessages(
 	wsIo wsIO,
 	onMessageFromClient onMgsReceivedFunc,
 ) error {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "wsConnections.processMessages").Str(ConnectionIDKey, string(connId)).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "wsConnections.processMessages").Str(ConnectionIDKey, string(connId)).Logger()
 	conn := newConnection(connId, wsIo, wsconns.connectionMessageBuffer)
 
 	wsconns.addConnection(conn)
@@ -95,11 +93,6 @@ func (wsconns *wsConnections) processMessages(
 					return
 				}
 				logger.Error().Err(errRead).Msg("read-error, not closing")
-				select {
-				case conn.fromClient <- "asdfasdf":
-				default:
-					go wsIo.Close()
-				}
 				return
 			}
 			conn.fromClient <- msgRead
@@ -107,17 +100,16 @@ func (wsconns *wsConnections) processMessages(
 	}()
 
 	for {
-		logger.Debug().Msg("about to enter select...")
 		select {
 		case msg := <-conn.fromApp:
-			logger.Debug().Msg("select: msg from backend")
+			logger.Debug().Str("backendMsg", msg).Msg("select: msg from backend")
 			err := writeWithTimeout(ctx, time.Second*5, wsIo, msg)
 			if err != nil {
 				logger.Error().Err(err).Msg("select: failed to relay message from app to client")
 				return err
 			}
 		case msg := <-conn.fromClient:
-			logger.Debug().Msg("select: msg from client")
+			logger.Debug().Str("clientMsg", msg).Msg("select: msg from client")
 			sendToAppErr := onMessageFromClient(ctx, msg)
 			if sendToAppErr != nil {
 				conn.fromApp <- sendToAppErr.Error()
@@ -137,7 +129,6 @@ func (wsconns *wsConnections) processMessages(
 			logger.Debug().Msg("select: context is done")
 			return ctx.Err()
 		}
-		logger.Debug().Msg("exited select")
 	}
 }
 

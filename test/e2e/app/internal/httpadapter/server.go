@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
@@ -55,7 +54,7 @@ func (s *server) Start(serverCtx context.Context, conf config.Config, ready func
 
 // Stop kills the listener
 func (s *server) Stop(ctx context.Context) error {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "Stop").Logger()
+	logger := zerolog.Ctx(ctx).With().Logger()
 
 	shutdownTimeout := 10 * time.Second
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -72,7 +71,7 @@ func (s *server) Stop(ctx context.Context) error {
 }
 
 func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Engine {
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "server:initEndpoints").Logger()
+	logger := zerolog.Ctx(ctx).With().Logger()
 	userService := services.NewUserService()
 
 	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(ctx, conf.DynamodbURL)
@@ -118,6 +117,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 		apiGroup := authorizedGroup.Group("/api")
 		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections)
 		apiGroup.POST("/message", apiHandler.messageHandler())
+		apiGroup.POST("/messages-in-bulk", apiHandler.sendInBulk())
 
 		wsGroup := authorizedGroup.Group("/ws")
 		wsHandler := newWSHandler(wsConnections)
@@ -142,7 +142,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 
 func (s *server) createSessionStore(ctx context.Context, connProps config.DbConnectionProperties, sessionDb string) (sessions.Store, error) {
 	var store sessions.Store
-	logger := zerolog.Ctx(ctx).With().Str(logging.MethodLogger, "create-session properties").Logger()
+	logger := zerolog.Ctx(ctx).With().Logger()
 
 	// I feel that we should have some implemenetation  connection URI for every (even app-specific for databases which don't have a widely available scheme)
 	connScheme := strings.Split(sessionDb, ":")[0]
@@ -181,7 +181,7 @@ func (s *server) createSessionStore(ctx context.Context, connProps config.DbConn
 
 // start starts the service
 func (s *server) start(serverCtx context.Context, portRequested int, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
-	logger := zerolog.Ctx(serverCtx).With().Str(logging.MethodLogger, "StartServer").Logger()
+	logger := zerolog.Ctx(serverCtx).With().Logger()
 	logger.Info().Msg("Starting listener....")
 
 	lstnr, lstnrErr := net.Listen("tcp", fmt.Sprintf(":%d", portRequested))

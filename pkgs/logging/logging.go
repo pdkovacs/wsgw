@@ -91,11 +91,3 @@ func Get() zerolog.Logger {
 
 	return log
 }
-
-const (
-	HandlerLogger  string = "handler"
-	ServiceLogger  string = "service"
-	UnitLogger     string = "unit"
-	FunctionLogger string = "function"
-	MethodLogger   string = "method"
-)

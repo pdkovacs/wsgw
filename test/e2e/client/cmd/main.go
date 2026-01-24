@@ -26,7 +26,7 @@ func main() {
 	)
 	defer cancelRequests()
 
-	logger := logging.Get().Level(zerolog.GlobalLevel()).With().Str(logging.UnitLogger, "main").Logger()
+	logger := logging.Get().Level(zerolog.GlobalLevel()).With().Logger()
 	logger.Info().Msg("Test application instance starting...")
 	ctx = logger.WithContext(ctx)
 

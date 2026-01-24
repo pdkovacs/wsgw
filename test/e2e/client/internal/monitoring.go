@@ -27,7 +27,13 @@ func createMetrics(runId string) *clientMonitoring {
 	incMsgNotFoundCounter := createCounter("ws.e2e.test.client.outstanding.msg.notfound.error", "MsgNotFoundCounter")
 	incdMsgTextMismatchCounter := createCounter("ws.e2e.test.client.outstanding.msg.text.mismatch.error", "dMsgTextMismatchCounter")
 
-	deliveryDurationHistogramMs := monitoring.CreateHistogram(config.OtelScope, "ws.e2e.test.delivery.duration.ms", "Message delivery duration in milliseconds", "ms")
+	deliveryDurationHistogramMs := monitoring.CreateHistogram(
+		config.OtelScope,
+		"ws.e2e.test.delivery.duration.ms",
+		"Message delivery duration in milliseconds",
+		"ms",
+		metric.WithExplicitBucketBoundaries(0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 4000, 8000, 16000),
+	)
 	deliveryDurationHistogramUs := monitoring.CreateHistogram(config.OtelScope, "ws.e2e.test.delivery.duration.us", "Message delivery duration in microseconds", "us")
 
 	attributes := metric.WithAttributes(attribute.KeyValue{Key: "runId", Value: attribute.StringValue(runId)})
@@ -49,7 +55,7 @@ func createMetrics(runId string) *clientMonitoring {
 			incdMsgTextMismatchCounter.Add(ctx, 1, attributes)
 		},
 		recordDeliveryDurationMs: func(ctx context.Context, deliveryDuration time.Duration) {
-			deliveryDurationHistogramMs.Record(ctx, float64(deliveryDuration.Milliseconds()), attributes)
+			deliveryDurationHistogramMs.Record(ctx, float64(deliveryDuration.Microseconds())/1000.0, attributes)
 		},
 		recordDeliveryDurationUs: func(ctx context.Context, deliveryDuration time.Duration) {
 			deliveryDurationHistogramUs.Record(ctx, float64(deliveryDuration.Microseconds()), attributes)

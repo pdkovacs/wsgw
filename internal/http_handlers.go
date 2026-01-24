@@ -11,7 +11,6 @@ import (
 	"time"
 	"wsgw/internal/config"
 	loadmanagement "wsgw/pkgs/loadmanegement"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 
 	"github.com/coder/websocket"
@@ -74,7 +73,7 @@ var errAppConnAccepting = errors.New("appError")
 
 // Relays the connection request to the backend's `POST /ws/connect` endpoint and
 func handleClientConnecting(requestCtx context.Context, r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
-	logger := zerolog.Ctx(r.Context()).With().Str(logging.MethodLogger, "handleClientConnecting").Logger()
+	logger := zerolog.Ctx(r.Context()).With().Logger()
 
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, appUrls.connecting(), nil)
 	if err != nil {
@@ -112,7 +111,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 }
 
 func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
-	logger = logger.With().Str(logging.MethodLogger, "handleClientDisconnected").Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
+	logger = logger.With().Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 	logger.Debug().Msg("BEGIN")
 
@@ -217,9 +216,9 @@ func connectHandler(
 			return
 		}
 
-		logger := zerolog.Ctx(requestContext).With().Str(logging.MethodLogger, "authentication handler").Str(ConnectionIDKey, string(appConn.id)).Logger()
+		logger := zerolog.Ctx(requestContext).With().Str(ConnectionIDKey, string(appConn.id)).Logger()
 
-		// logger = logger.().Str(logging.MethodLogger, "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
+		// logger = logger.().Str(logging.UnitLogger, "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 		wsConn, subsErr := websocket.Accept(g.Writer, g.Request, &websocket.AcceptOptions{
 			OriginPatterns: []string{loadBalancerAddress},
@@ -280,7 +279,7 @@ func connectHandler(
 
 func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerFunc {
 	return func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.FunctionLogger, "pushHandler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		logger.Debug().Msg("BEGIN")
 
 		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/pgks/dto"
@@ -27,7 +26,7 @@ var httpClient http.Client = http.Client{
 }
 
 func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
-	logger0 := zerolog.Ctx(ctx).With().Str(logging.UnitLogger, "messaging").Str("wsgwUrl", wsgwUrl).Str(logging.FunctionLogger, "SendMessage").Logger()
+	logger0 := zerolog.Ctx(ctx).With().Str("wsgwUrl", wsgwUrl).Logger()
 	logger0.Debug().Str("recipient", userId).Any("msg", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
 
 	var err error

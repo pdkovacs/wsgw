@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 	"wsgw/internal/config"
-	"wsgw/pkgs/logging"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -29,7 +28,7 @@ func NewKeyvalueStore(host string, port int) *KeyvalueStore {
 }
 
 func (client *KeyvalueStore) registerConnection(ctx context.Context, connectionId ConnectionID) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(logging.MethodLogger, "registerConnection").Str(ConnectionIDKey, string(connectionId)).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(ConnectionIDKey, string(connectionId)).Logger()
 	myIpAddress, addressErr := getMyIPAddress()
 	if addressErr != nil {
 		logger.Error().Msg("Cannot register my connection ownership, I have no IP address")
@@ -44,7 +43,7 @@ func (client *KeyvalueStore) registerConnection(ctx context.Context, connectionI
 }
 
 func (client *KeyvalueStore) deregisterConnection(ctx context.Context, connectionId ConnectionID) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(logging.MethodLogger, "deregisterConnection").Str(ConnectionIDKey, string(connectionId)).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(ConnectionIDKey, string(connectionId)).Logger()
 	logger.Debug().Send()
 
 	redisError := client.rdb.HDel(ctx, connectionHashSetName, string(connectionId))
@@ -56,7 +55,7 @@ func (client *KeyvalueStore) deregisterConnection(ctx context.Context, connectio
 }
 
 func (client *KeyvalueStore) findConnectionOwnersAddress(ctx context.Context, connectionId ConnectionID) (string, error) {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(logging.MethodLogger, "findConnectionOwnersAddress").Str(ConnectionIDKey, string(connectionId)).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(ConnectionIDKey, string(connectionId)).Logger()
 	logger.Debug().Send()
 
 	redisStringCmd := client.rdb.HGet(ctx, connectionHashSetName, string(connectionId))
@@ -89,7 +88,7 @@ func (cluster *ClusterSupport) deregisterConnection(ctx context.Context, connect
 }
 
 func (cluster *ClusterSupport) relayMessage(ctx context.Context, connectionId ConnectionID, message string) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "clusterSupport").Str(logging.MethodLogger, "relayMessage").Str(ConnectionIDKey, connIdPathParamName).Str("message", message).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "clusterSupport").Str(ConnectionIDKey, connIdPathParamName).Str("message", message).Logger()
 	connOwnerIpAddress, errAddress := cluster.kvClient.findConnectionOwnersAddress(ctx, connectionId)
 	if errAddress != nil {
 		logger.Error().Err(errAddress).Msg("failed to find connection owner's address")

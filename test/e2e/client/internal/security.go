@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/base64"
 	"strings"
-	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +11,7 @@ import (
 
 func authenticationCheck(conf config.Config) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		logger := zerolog.Ctx(c.Request.Context()).With().Str(logging.UnitLogger, "basic authn handler").Logger()
+		logger := zerolog.Ctx(c.Request.Context()).With().Logger()
 		authenticated := false
 
 		authnHeaderValue, hasHeader := c.Request.Header["Authorization"]

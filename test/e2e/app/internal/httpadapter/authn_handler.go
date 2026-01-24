@@ -1,7 +1,6 @@
 package httpadapter
 
 import (
-	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/security/authn"
 	"wsgw/test/e2e/app/internal/services"
@@ -22,7 +21,7 @@ func authenticationCheck(conf config.Config, userService *services.UserService) 
 
 // authentication handles authentication
 func authentication(conf config.Config, userService *services.UserService, log zerolog.Logger) gin.HandlerFunc {
-	logger := log.With().Str(logging.FunctionLogger, "authentication").Logger()
+	logger := log.With().Logger()
 	logger.Debug().Msg("Setting up basic authentication framework")
 	return basicScheme(basicConfig{PasswordCredentialsList: conf.PasswordCredentials}, userService)
 }

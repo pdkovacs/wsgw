@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -75,7 +74,6 @@ type mockApplication struct {
 func NewMockApp(getwsgwUrl func() string) MockApp {
 	return &mockApplication{
 		getwsgwUrl: getwsgwUrl,
-		logger:     logging.Get().With().Str("unit", "mockApplication").Logger(),
 		connMocks:  make(map[string]*MyMock),
 	}
 }
@@ -122,7 +120,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	ws := rootEngine.Group("/ws")
 
 	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "handle-ws-connecting").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 		res := g
 		cred, hasCredHeader := req.Header["Authorization"]
@@ -155,7 +153,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	})
 
 	ws.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS disconnection handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 		res := g
 
@@ -173,7 +171,7 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	})
 
 	ws.POST(string(wsgw.MessagePath), func(g *gin.Context) {
-		logger := zerolog.Ctx(g.Request.Context()).With().Str(logging.MethodLogger, "WS message handler").Logger()
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 		res := g
 

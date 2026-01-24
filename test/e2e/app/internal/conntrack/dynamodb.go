@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"wsgw/pkgs/logging"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -48,7 +47,7 @@ type DyndbConntracker struct {
 }
 
 func (connmap *DyndbConntracker) AddConnection(ctx context.Context, userId string, connId string) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str(logging.MethodLogger, "AddConnectionId").Str("userId", userId).Str("connId", connId).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str("userId", userId).Str("connId", connId).Logger()
 
 	connIdAttr := &DyndbWsgwConnId{UserId: userId, ConnectionId: connId, DateCreated: time.Now().UTC().Format(time.RFC3339Nano)}
 
@@ -74,7 +73,7 @@ func (connmap *DyndbConntracker) AddConnection(ctx context.Context, userId strin
 }
 
 func (connmap *DyndbConntracker) RemoveConnection(ctx context.Context, userId string, connId string) (bool, error) {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str(logging.MethodLogger, "RemoveConnectionId").Str("userId", userId).Str("connId", connId).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str("userId", userId).Str("connId", connId).Logger()
 
 	dynConnId := DyndbWsgwConnId{
 		UserId:       userId,
@@ -103,7 +102,7 @@ func (connmap *DyndbConntracker) RemoveConnection(ctx context.Context, userId st
 }
 
 func (connmap *DyndbConntracker) GetConnections(ctx context.Context, userId string) ([]string, error) {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str(logging.MethodLogger, "RemoveConnectionGetConnectionsId").Str("userId", userId).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "DyndbConntracker").Str("userId", userId).Logger()
 
 	var err error
 	var response *aws_dyndb.QueryOutput

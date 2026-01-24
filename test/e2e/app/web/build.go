@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"wsgw/pkgs/logging"
 
 	"github.com/rs/zerolog"
 )
@@ -25,7 +24,7 @@ func (f fsFunc) Open(name string) (fs.File, error) {
 func AssetHandler(prefix, root string, log zerolog.Logger) http.Handler {
 	handler := fsFunc(func(name string) (fs.File, error) {
 
-		logger := log.With().Str(logging.MethodLogger, "AssetHandler").Logger()
+		logger := log.With().Logger()
 
 		logger.Debug().Str("asset", name).Msg("asset requested")
 

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/logging"
 	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/client/internal/config"
 
@@ -41,7 +40,7 @@ func (cli *wsClient) connect(ctx context.Context, runId string, username string,
 	)
 	defer connectSpan.End()
 
-	logger := zerolog.Ctx(connectCtx).With().Str(logging.MethodLogger, "wsClient.connect").Logger()
+	logger := zerolog.Ctx(connectCtx).With().Logger()
 	dialOptions := createDialOptions(monitoring.InjectIntoHeader(connectCtx, http.Header{}), createBasicAuthnHeader(username, password))
 	conn, httpResponse, err := wsConnect(connectCtx, cli.wsgwUri, dialOptions)
 	if err != nil || httpResponse.StatusCode != http.StatusSwitchingProtocols {
@@ -50,7 +49,8 @@ func (cli *wsClient) connect(ctx context.Context, runId string, username string,
 	}
 
 	go func() {
-		readFromAppLogger := logger.With().Str(logging.FunctionLogger, "readFromApp").Logger()
+		defer conn.Close(websocket.StatusNormalClosure, "closing connection")
+		readFromAppLogger := logger.With().Logger()
 		for {
 			readFromAppLogger.Debug().Msg("waiting for input on wsconn...")
 			msgType, msgFromApp, readErr := conn.Read(connectCtx)
@@ -60,9 +60,9 @@ func (cli *wsClient) connect(ctx context.Context, runId string, username string,
 					readFromAppLogger.Debug().Msg("Client closed the connection normally")
 					return
 				}
-				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				if errors.Is(readErr, context.DeadlineExceeded) || errors.Is(readErr, context.Canceled) {
 					logger.Debug().Msg("context done while reading from websocket")
-					continue
+					return
 				}
 				readFromAppLogger.Error().Err(readErr).Msg("error while reading from websocket")
 				return

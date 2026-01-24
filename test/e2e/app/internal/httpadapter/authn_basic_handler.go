@@ -3,7 +3,6 @@ package httpadapter
 import (
 	"encoding/base64"
 	"strings"
-	"wsgw/pkgs/logging"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/services"
 
@@ -38,7 +37,7 @@ func decodeBasicAuthnHeaderValue(headerValue string) (userid string, password st
 
 func checkBasicAuthentication(conf basicConfig, userService services.UserService) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		logger := zerolog.Ctx(c.Request.Context()).With().Str(logging.UnitLogger, "basic authn handler").Logger()
+		logger := zerolog.Ctx(c.Request.Context()).With().Logger()
 		authenticated := false
 
 		session := sessions.Default(c)
