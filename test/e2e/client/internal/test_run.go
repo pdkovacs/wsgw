@@ -47,13 +47,13 @@ var httpClient http.Client = http.Client{
 }
 
 type testRun struct {
-	userCount            int
-	testDataPartionCount int
-	runId                string
-	dlvrTracker          *deliveryTracker
-	monitoring           *clientMonitoring
-	clients              []*client
-	notifyCompleted      func()
+	userCount         int
+	testDataChunkSize int
+	runId             string
+	dlvrTracker       *deliveryTracker
+	monitoring        *clientMonitoring
+	clients           []*client
+	notifyCompleted   func()
 }
 
 func newTestRun(userCount int, testDataPartionCount int, notifyCompleted func()) *testRun {
@@ -61,12 +61,12 @@ func newTestRun(userCount int, testDataPartionCount int, notifyCompleted func())
 	monitoring := createMetrics(runId)
 
 	return &testRun{
-		userCount:            userCount,
-		testDataPartionCount: testDataPartionCount,
-		runId:                runId,
-		dlvrTracker:          newDeliveryTracker(),
-		monitoring:           monitoring,
-		notifyCompleted:      notifyCompleted,
+		userCount:         userCount,
+		testDataChunkSize: testDataPartionCount,
+		runId:             runId,
+		dlvrTracker:       newDeliveryTracker(),
+		monitoring:        monitoring,
+		notifyCompleted:   notifyCompleted,
 	}
 }
 
@@ -151,8 +151,7 @@ func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*mess
 	var errs error
 
 	var wg sync.WaitGroup
-	chunkSize := (len(messagesToSend) + r.testDataPartionCount - 1) / r.testDataPartionCount
-	for c := range slices.Chunk(messagesToSend, chunkSize) {
+	for c := range slices.Chunk(messagesToSend, r.testDataChunkSize) {
 		fmt.Printf(">>>>>>>>>>>>>>>> chunk size: %d\n", len(c))
 		wg.Go(func() {
 			if err := r.sendTestDataChunk(ctx, c, endpoint, epCredentials); err != nil {

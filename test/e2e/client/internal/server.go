@@ -89,18 +89,18 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 			}
 		}
 
-		testDataPartionCount := 1
-		testDataPartionCountStr := g.Request.URL.Query().Get("testdata-partion-count")
-		if len(testDataPartionCountStr) > 0 {
-			var testDataPartionCountConvErr error
-			testDataPartionCount, testDataPartionCountConvErr = strconv.Atoi(testDataPartionCountStr)
-			if testDataPartionCountConvErr != nil {
-				logger.Error().Err(testDataPartionCountConvErr).Str("testDataPartionCountStr", testDataPartionCountStr).Msg("failed to convert query parameter 'testdata-partion-count'")
-				g.AbortWithError(400, testDataPartionCountConvErr)
+		testDataChunkSize := 1
+		testDataChunkSizeStr := g.Request.URL.Query().Get("testdata-chunksize")
+		if len(testDataChunkSizeStr) > 0 {
+			var testDataChunkSizeConvErr error
+			testDataChunkSize, testDataChunkSizeConvErr = strconv.Atoi(testDataChunkSizeStr)
+			if testDataChunkSizeConvErr != nil {
+				logger.Error().Err(testDataChunkSizeConvErr).Str("testDataChunkSizeStr", testDataChunkSizeStr).Msg("failed to convert query parameter 'testdata-partion-count'")
+				g.AbortWithError(400, testDataChunkSizeConvErr)
 				return
 			}
-			if testDataPartionCount < 1 {
-				logger.Error().Int("testDataPartionCount", testDataPartionCount).Msg("'testdata-partion-count' must be greater than 1")
+			if testDataChunkSize < 1 {
+				logger.Error().Int("testDataChunkSize", testDataChunkSize).Msg("'testdata-partion-count' must be greater than 1")
 				g.AbortWithStatus(400)
 				return
 			}
@@ -128,7 +128,7 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		runContext = tmpCtx
 		defer span.End()
 
-		run := newTestRun(userCount, testDataPartionCount, notifyDone)
+		run := newTestRun(userCount, testDataChunkSize, notifyDone)
 		span.SetAttributes(attribute.KeyValue{Key: "runId", Value: attribute.StringValue(run.runId)})
 		runContext = logger.With().Str("runId", run.runId).Logger().WithContext(runContext)
 
