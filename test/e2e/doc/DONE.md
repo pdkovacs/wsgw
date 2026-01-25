@@ -46,7 +46,18 @@ Delivering
 
     ![alt text](image-1.png)
 
-* 512 messages to 195k destinations never finishes — with only about 90k deliveried
+Loads having 512 messages to 195k destinations and larger require a large
+total number of sockets where the limitations of stress testing on a local
+machine with minikube start to show by failures to create connections with
+the default range for ephemeral sockets most in the test application.
+Increasing the the number of application instances helps. Here are some
+results with 16 app instances:
+
+* 512 messages to 193k destinations:
+
+![alt text](image-2.png)
+
+The time spent in WSGW as measured "inside" is still in the order of tens of microseconds.
 
 ----
 
