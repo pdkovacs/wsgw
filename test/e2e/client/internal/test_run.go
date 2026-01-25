@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -21,6 +22,29 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+const (
+	numCoroutines int = 16
+)
+
+var transport = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	MaxIdleConnsPerHost:   numCoroutines,
+	ResponseHeaderTimeout: 90 * time.Second,
+	MaxIdleConns:          100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 10 * time.Second,
+}
+
+var httpClient http.Client = http.Client{
+	Transport: transport,
+	Timeout:   90 * time.Second,
+}
 
 type testRun struct {
 	userCount            int
@@ -158,7 +182,7 @@ func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMe
 
 	monitoring.InjectIntoHeader(ctx, req.Header)
 
-	response, sendReqErr := createHttpClientWoKeepAlive().Do(req)
+	response, sendReqErr := httpClient.Do(req)
 	if sendReqErr != nil {
 		logger.Error().Err(sendReqErr).Msgf("failed to send request: %#v", sendReqErr)
 		return sendReqErr
@@ -174,18 +198,4 @@ func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMe
 	}
 
 	return nil
-}
-
-func createHttpClientWoKeepAlive() *http.Client {
-	transport := &http.Transport{
-		// So as to avoid connection reuse, so as to achieve effective load-balancing
-		DisableKeepAlives:   true,
-		MaxIdleConns:        0,
-		MaxIdleConnsPerHost: 0,
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
-	}
 }

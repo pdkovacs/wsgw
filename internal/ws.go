@@ -92,7 +92,7 @@ func (wsconns *wsConnections) processMessages(
 					conn.connClosed <- closeError
 					return
 				}
-				logger.Error().Err(errRead).Msg("read-error, not closing")
+				logger.Error().Err(errRead).Msg("read-error, closing...")
 				return
 			}
 			conn.fromClient <- msgRead

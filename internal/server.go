@@ -81,11 +81,12 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 	}
 
 	server := &http.Server{
-		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
-		Handler:      r,
-		ReadTimeout:  0,
-		WriteTimeout: 0,
-		IdleTimeout:  90 * time.Second,
+		BaseContext:       func(l net.Listener) context.Context { return serverCtx },
+		Handler:           r,
+		ReadHeaderTimeout: 90 * time.Second,
+		ReadTimeout:       90 * time.Second,
+		WriteTimeout:      90 * time.Second,
+		IdleTimeout:       90 * time.Second,
 	}
 
 	return server.Serve(listener)

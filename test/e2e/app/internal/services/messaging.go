@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -21,8 +22,27 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const (
+	numCoroutines int = 16
+)
+
+var transport = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	MaxIdleConnsPerHost:   numCoroutines,
+	ResponseHeaderTimeout: 90 * time.Second,
+	MaxIdleConns:          100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 10 * time.Second,
+}
+
 var httpClient http.Client = http.Client{
-	Timeout: time.Second * 15,
+	Transport: transport,
+	Timeout:   90 * time.Second,
 }
 
 func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
