@@ -8,7 +8,7 @@ RUN useradd -m --shell /bin/false wsgw
 RUN apt-get update && apt-get install -y git curl iproute2 && apt-get clean
 RUN mkdir -p /opt/wsgw
 WORKDIR /opt/wsgw
-COPY wsgw ./
+COPY --chown=root:root --chmod=555 wsgw ./
 RUN chmod +x wsgw
 RUN ls -la /opt/
 EXPOSE 8080
