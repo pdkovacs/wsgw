@@ -6,16 +6,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"wsgw/test/e2e/app/pgks/security"
 
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 )
-
-// PasswordCredentials holds password-credentials
-type PasswordCredentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
 
 // Config holds the available command-line options
 type Config struct {
@@ -24,7 +19,7 @@ type Config struct {
 	ServerURLContext      string
 	SessionMaxAge         int
 	LoadBalancerAddress   string
-	PasswordCredentials   []PasswordCredentials
+	PasswordCredentials   []security.PasswordCredentials
 	SessionDB             string
 	DBHost                string
 	DBPort                int
@@ -63,7 +58,7 @@ func GetConfig(args []string) Config {
 		},
 	}), nil)
 
-	var pwdcreds []PasswordCredentials
+	var pwdcreds []security.PasswordCredentials
 	pwdcredsString := k.String("PASSWORD_CREDENTIALS")
 	if len(pwdcredsString) > 0 {
 		parseJson(pwdcredsString, &pwdcreds)

@@ -6,22 +6,17 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"wsgw/test/e2e/app/pgks/security"
 
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 )
 
-// PasswordCredentials holds password-credentials
-type PasswordCredentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // config holds the available command-line options
 type Config struct {
 	ServerHostname        string
 	ServerPort            int
-	PasswordCredentials   []PasswordCredentials
+	PasswordCredentials   []security.PasswordCredentials
 	WsgwUri               string
 	AppServiceUrl         string
 	OtlpEndpoint          string
@@ -52,7 +47,7 @@ func GetConfig(args []string) Config {
 		},
 	}), nil)
 
-	var pwdcreds []PasswordCredentials
+	var pwdcreds []security.PasswordCredentials
 	pwdcredsString := k.String("PASSWORD_CREDENTIALS")
 	if len(pwdcredsString) > 0 {
 		parseJson(pwdcredsString, &pwdcreds)

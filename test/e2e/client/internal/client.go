@@ -7,6 +7,7 @@ import (
 	math_rand "math/rand"
 	"time"
 	"wsgw/pkgs/monitoring"
+	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/rs/zerolog"
@@ -17,7 +18,7 @@ import (
 )
 
 type client struct {
-	credentials        config.PasswordCredentials
+	credentials        security.PasswordCredentials
 	ws                 *wsClient // currently used only for receiving push messages
 	outsandingMessages *deliveryTracker
 	monitoring         *clientMonitoring
@@ -25,7 +26,7 @@ type client struct {
 }
 
 func newClient(
-	credentials config.PasswordCredentials,
+	credentials security.PasswordCredentials,
 	wsgwUri string,
 	outsandingMessages *deliveryTracker,
 	monitoring *clientMonitoring,

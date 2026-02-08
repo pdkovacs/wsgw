@@ -3,16 +3,14 @@ package httpadapter
 import (
 	"fmt"
 	"net/http"
-	"wsgw/test/e2e/app/internal/config"
-	"wsgw/test/e2e/app/internal/security/authn"
-	"wsgw/test/e2e/app/internal/services"
+	"wsgw/test/e2e/app/pgks/security"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
 
-func userListHandler(userService services.UserService, passwordCreds []config.PasswordCredentials) func(c *gin.Context) {
+func userListHandler(userService security.UserService, passwordCreds []security.PasswordCredentials) func(c *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 
@@ -26,22 +24,22 @@ func userListHandler(userService services.UserService, passwordCreds []config.Pa
 	}
 }
 
-func userInfoHandler(userService services.UserService) func(c *gin.Context) {
+func userInfoHandler(userService security.UserService) func(c *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context())
 		userId := g.Query("userId")
 
 		session := sessions.Default(g)
-		user := session.Get(UserKey)
+		user := session.Get(security.UserKey)
 
-		usession, ok := user.(SessionData)
+		usession, ok := user.(security.SessionData)
 		if !ok {
 			logger.Error().Type("user", user).Msg("failed to cast user session")
 			g.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
-		var userInfo authn.UserInfo
+		var userInfo security.UserInfo
 		if userId == "" {
 			userInfo = usession.UserInfo
 		} else {
@@ -55,19 +53,19 @@ func userInfoHandler(userService services.UserService) func(c *gin.Context) {
 	}
 }
 
-func getSessionDataFromSession(g *gin.Context, logger *zerolog.Logger) (SessionData, bool) {
+func getSessionDataFromSession(g *gin.Context, logger *zerolog.Logger) (security.SessionData, bool) {
 	session := sessions.Default(g)
-	userSessionData := session.Get(UserKey)
+	userSessionData := session.Get(security.UserKey)
 	if userSessionData == nil {
 		logger.Error().Msg("no session found")
 		g.AbortWithStatus(http.StatusUnauthorized)
-		return SessionData{}, false
+		return security.SessionData{}, false
 	}
 
-	if userSessionData, ok := userSessionData.(SessionData); ok {
+	if userSessionData, ok := userSessionData.(security.SessionData); ok {
 		return userSessionData, true
 	}
 
 	logger.Warn().Str("sessionDataType", fmt.Sprintf("%T", userSessionData)).Msg("failed to cast session data to SessionData")
-	return SessionData{}, false
+	return security.SessionData{}, false
 }

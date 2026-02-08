@@ -1,10 +1,8 @@
-package httpadapter
+package security
 
 import (
 	"encoding/base64"
 	"strings"
-	"wsgw/test/e2e/app/internal/config"
-	"wsgw/test/e2e/app/internal/services"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -13,7 +11,7 @@ import (
 
 // basicConfig holds the configuration for the Basic authentication scheme
 type basicConfig struct {
-	PasswordCredentialsList []config.PasswordCredentials
+	PasswordCredentialsList []PasswordCredentials
 }
 
 func decodeBasicAuthnHeaderValue(headerValue string) (userid string, password string, decodeOK bool) {
@@ -35,7 +33,7 @@ func decodeBasicAuthnHeaderValue(headerValue string) (userid string, password st
 	return pair[0], pair[1], true
 }
 
-func checkBasicAuthentication(conf basicConfig, userService services.UserService) func(c *gin.Context) {
+func checkBasicAuthentication(conf basicConfig, userService UserService) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		logger := zerolog.Ctx(c.Request.Context()).With().Logger()
 		authenticated := false
@@ -86,7 +84,7 @@ func checkBasicAuthentication(conf basicConfig, userService services.UserService
 	}
 }
 
-func basicScheme(conf basicConfig, userService *services.UserService) gin.HandlerFunc {
+func basicScheme(conf basicConfig, userService *UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		checkBasicAuthentication(conf, *userService)(c)
 	}

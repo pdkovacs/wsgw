@@ -14,6 +14,7 @@ import (
 	"time"
 	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/pgks/dto"
+	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/google/uuid"
@@ -112,7 +113,7 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 	r.clients = clients
 }
 
-func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*message, endpoint string, epCredentials config.PasswordCredentials) error {
+func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*message, endpoint string, epCredentials security.PasswordCredentials) error {
 	logger := zerolog.Ctx(ctx).With().Str("endpoint", endpoint).Logger()
 
 	logger.Debug().Msg("BEGIN")
@@ -165,7 +166,7 @@ func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*mess
 	return errs
 }
 
-func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMessage, endpoint string, epCredentials config.PasswordCredentials) error {
+func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMessage, endpoint string, epCredentials security.PasswordCredentials) error {
 	logger := zerolog.Ctx(ctx).With().Str("endpoint", endpoint).Logger()
 	message, marshalErr := json.Marshal(chunkToSend)
 	if marshalErr != nil {

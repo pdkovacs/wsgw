@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 	"wsgw/test/e2e/app/pgks/dto"
-	"wsgw/test/e2e/client/internal/config"
+	"wsgw/test/e2e/app/pgks/security"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -15,7 +15,7 @@ type message struct {
 	testRunId  string
 	id         string
 	text       string
-	sender     config.PasswordCredentials
+	sender     security.PasswordCredentials
 	recipients []recipientName
 	sentAt     time.Time
 	span       trace.Span

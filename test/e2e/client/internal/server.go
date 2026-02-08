@@ -9,6 +9,7 @@ import (
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/pkgs/version_info"
+	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/gin-gonic/gin"
@@ -59,7 +60,7 @@ func initEndpoints(conf config.Config) *gin.Engine {
 	})
 
 	authorizedGroup := rootEngine.Group("/")
-	authorizedGroup.Use(authenticationCheck(conf))
+	authorizedGroup.Use(security.AuthenticationCheck(conf.PasswordCredentials, &security.UserService{}))
 	authorizedGroup.POST("/run", runTestHandler(conf))
 
 	return rootEngine

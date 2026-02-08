@@ -1,10 +1,8 @@
-package services
+package security
 
 import (
 	"context"
 	"fmt"
-	"wsgw/test/e2e/app/internal/config"
-	"wsgw/test/e2e/app/internal/security/authn"
 )
 
 func NewUserService() UserService {
@@ -18,18 +16,18 @@ func (us *UserService) getDisplayName(userId string) string {
 	return userId
 }
 
-func (us *UserService) GetUserInfo(ctx context.Context, userId string) authn.UserInfo {
-	return authn.UserInfo{
+func (us *UserService) GetUserInfo(ctx context.Context, userId string) UserInfo {
+	return UserInfo{
 		UserId:      userId,
 		DisplayName: us.getDisplayName(userId),
 	}
 }
 
-func (us *UserService) GetUsers(ctx context.Context, passwordCreds []config.PasswordCredentials) ([]authn.UserInfo, error) {
+func (us *UserService) GetUsers(ctx context.Context, passwordCreds []PasswordCredentials) ([]UserInfo, error) {
 	if len(passwordCreds) > 0 {
-		userInfoList := []authn.UserInfo{}
+		userInfoList := []UserInfo{}
 		for _, creds := range passwordCreds {
-			userInfoList = append(userInfoList, authn.UserInfo{
+			userInfoList = append(userInfoList, UserInfo{
 				UserId:      creds.Username,
 				DisplayName: creds.Username,
 			})

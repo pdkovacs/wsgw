@@ -15,7 +15,7 @@ import (
 	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
-	"wsgw/test/e2e/app/internal/services"
+	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/app/web"
 
 	"github.com/gin-contrib/sessions"
@@ -72,7 +72,7 @@ func (s *server) Stop(ctx context.Context) error {
 
 func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Engine {
 	logger := zerolog.Ctx(ctx).With().Logger()
-	userService := services.NewUserService()
+	userService := security.NewUserService()
 
 	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(ctx, conf.DynamodbURL)
 	if conntrackerErr != nil {
@@ -82,7 +82,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
 
-	gob.Register(SessionData{})
+	gob.Register(security.SessionData{})
 
 	var connProps config.DbConnectionProperties
 	if len(conf.DBHost) > 0 {
@@ -98,7 +98,14 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 
 	rootEngine.Use(sessions.Sessions("mysession", store))
 
-	rootEngine.NoRoute(authentication(conf, &userService, zerolog.Ctx(ctx).With().Logger()), gin.WrapH(web.AssetHandler("/", "dist", logger)))
+	rootEngine.NoRoute(
+		security.Authentication(
+			conf.PasswordCredentials,
+			&userService,
+			zerolog.Ctx(ctx).With().Logger(),
+		),
+		gin.WrapH(web.AssetHandler("/", "dist", logger)),
+	)
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))
@@ -108,7 +115,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 
 	authorizedGroup := rootEngine.Group("/")
 	{
-		authorizedGroup.Use(authenticationCheck(conf, &userService))
+		authorizedGroup.Use(security.AuthenticationCheck(conf.PasswordCredentials, &userService))
 
 		authorizedGroup.GET("/config", configHandler(conf.WsgwHost, conf.WsgwPort))
 		authorizedGroup.GET("/user", userInfoHandler(userService))

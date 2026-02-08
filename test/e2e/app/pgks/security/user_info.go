@@ -1,4 +1,4 @@
-package authn
+package security
 
 type UserInfo struct {
 	UserId      string `json:"userID"`
