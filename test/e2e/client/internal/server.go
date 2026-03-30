@@ -80,12 +80,12 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 			userCount, userCountConvErr = strconv.Atoi(userCountStr)
 			if userCountConvErr != nil {
 				logger.Error().Err(userCountConvErr).Str("userCountStr", userCountStr).Msg("failed to convert query parameter 'user-count'")
-				g.AbortWithError(400, userCountConvErr)
+				g.AbortWithError(http.StatusBadRequest, userCountConvErr)
 				return
 			}
 			if userCount < 1 {
 				logger.Error().Int("userCount", userCount).Msg("'user-count' must be greater than 1")
-				g.AbortWithStatus(400)
+				g.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
 		}
@@ -97,12 +97,12 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 			testDataChunkSize, testDataChunkSizeConvErr = strconv.Atoi(testDataChunkSizeStr)
 			if testDataChunkSizeConvErr != nil {
 				logger.Error().Err(testDataChunkSizeConvErr).Str("testDataChunkSizeStr", testDataChunkSizeStr).Msg("failed to convert query parameter 'testdata-partion-count'")
-				g.AbortWithError(400, testDataChunkSizeConvErr)
+				g.AbortWithError(http.StatusBadRequest, testDataChunkSizeConvErr)
 				return
 			}
 			if testDataChunkSize < 1 {
 				logger.Error().Int("testDataChunkSize", testDataChunkSize).Msg("'testdata-partion-count' must be greater than 1")
-				g.AbortWithStatus(400)
+				g.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
 		}
@@ -114,7 +114,7 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 			testRunTimeout, testRunTimeoutConvErr = time.ParseDuration(testRunTimeoutStr)
 			if testRunTimeoutConvErr != nil {
 				logger.Error().Err(testRunTimeoutConvErr).Str("testRunTimeoutStr", testRunTimeoutStr).Msg("failed to convert query parameter 'timeout'")
-				g.AbortWithError(400, testRunTimeoutConvErr)
+				g.AbortWithError(http.StatusBadRequest, testRunTimeoutConvErr)
 				return
 			}
 		}
