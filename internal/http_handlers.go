@@ -80,7 +80,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return nil, errAppConnInternal
 	}
-	request.Header = r.Header
+	request.Header = r.Header.Clone()
 
 	connId := createConnectionId(r.Context())
 
