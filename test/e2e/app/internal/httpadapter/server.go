@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	wsgw "wsgw/internal"
+	"wsgw/pkgs/monitoring"
 	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
@@ -81,6 +82,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("e2etest-application"))
+	rootEngine.Use(monitoring.NewOtelTraceExtraction())
 
 	gob.Register(security.SessionData{})
 

@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	wsgw "wsgw/internal"
-	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
 
@@ -29,7 +28,7 @@ func newWSHandler(
 
 func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
-		requestCtx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		requestCtx := g.Request.Context()
 		tracer := otel.Tracer(config.OtelScope)
 		tmpCtx, span := tracer.Start(requestCtx, "new-ws-connection")
 		defer span.End()
@@ -70,7 +69,7 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) func(g *gin.Context) {
 	return func(g *gin.Context) {
 		tracer := otel.Tracer(config.OtelScope)
-		requestCtx := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		requestCtx := g.Request.Context()
 		tmpCtx, span := tracer.Start(requestCtx, "ws-disconnect")
 		defer span.End()
 		requestCtx = tmpCtx

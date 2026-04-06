@@ -196,14 +196,12 @@ func connectHandler(
 	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
-		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		requestContext := g.Request.Context()
 		tracer := otel.Tracer(config.OtelScope)
-		tmpCtx, span := tracer.Start(requestContext, "new-ws-connection")
-		requestContext = tmpCtx
+		requestContext, span := tracer.Start(requestContext, "new-ws-connection")
+		defer span.End()
 
 		appConn, clientConnectErr := handleClientConnecting(requestContext, g.Request, createConnectionId, appUrls)
-
-		span.End()
 
 		if clientConnectErr != nil {
 			switch clientConnectErr {
@@ -282,7 +280,7 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		logger.Debug().Msg("BEGIN")
 
-		requestContext := monitoring.ExtractFromHeader(g.Request.Context(), g.Request.Header)
+		requestContext := g.Request.Context()
 		tracer := otel.Tracer(config.OtelScope)
 		tmpCtx, span := tracer.Start(requestContext, "push-message")
 		defer span.End()

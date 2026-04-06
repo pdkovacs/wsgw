@@ -9,6 +9,7 @@ import (
 	"time"
 	"wsgw/internal/config"
 	"wsgw/pkgs/logging"
+	"wsgw/pkgs/monitoring"
 	"wsgw/pkgs/version_info"
 
 	"github.com/gin-gonic/gin"
@@ -109,6 +110,8 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 	rootEngine := gin.Default()
 
 	rootEngine.Use(RequestLogger("websocketGatewayServer"))
+
+	rootEngine.Use(monitoring.NewOtelTraceExtraction())
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))

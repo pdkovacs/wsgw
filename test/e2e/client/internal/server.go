@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 	wsgw "wsgw/internal"
+	"wsgw/pkgs/monitoring"
 	"wsgw/pkgs/version_info"
 	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/client/internal/config"
@@ -54,6 +55,7 @@ func CreateStartServer(serverCtx context.Context, conf config.Config) error {
 func initEndpoints(conf config.Config) *gin.Engine {
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("e2etest-client"))
+	rootEngine.Use(monitoring.NewOtelTraceExtraction())
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))
