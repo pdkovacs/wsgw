@@ -179,6 +179,7 @@ func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMe
 		return createReqErr
 	}
 	req.Header = createBasicAuthnHeader(epCredentials.Username, epCredentials.Password)
+	req.Header.Set("Content-Type", "application/json")
 
 	monitoring.InjectIntoHeader(ctx, req.Header)
 

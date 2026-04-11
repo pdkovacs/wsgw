@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/gob"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"wsgw/test/e2e/app/pgks/security"
 	"wsgw/test/e2e/client/internal/config"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/memstore"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -53,9 +56,12 @@ func CreateStartServer(serverCtx context.Context, conf config.Config) error {
 }
 
 func initEndpoints(conf config.Config) *gin.Engine {
+	gob.Register(security.SessionData{})
+
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("e2etest-client"))
 	rootEngine.Use(monitoring.NewOtelTraceExtraction())
+	rootEngine.Use(sessions.Sessions("mysession", memstore.NewStore([]byte("secret"))))
 
 	rootEngine.GET("/app-info", func(c *gin.Context) {
 		c.JSON(200, version_info.GetVersionInfo(config.GetVersionData()))
