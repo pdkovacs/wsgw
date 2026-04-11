@@ -28,6 +28,7 @@ type Config struct {
 	DBPassword            string
 	UsernameCookie        string
 	DynamodbURL           string
+	ValkeyURL             string
 	WsgwHost              string
 	WsgwPort              int
 	OtlpEndpoint          string
@@ -77,6 +78,7 @@ func GetConfig(args []string) Config {
 		DBPassword:            k.String("DB_PASSWORD"),
 		UsernameCookie:        k.String("USERNAME_COOKIE"),
 		DynamodbURL:           k.String("DYNAMODB_URL"),
+		ValkeyURL:             k.String("VALKEY_URL"),
 		WsgwHost:              k.String("WSGW_HOST"),
 		WsgwPort:              k.Int("WSGW_PORT"),
 		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
