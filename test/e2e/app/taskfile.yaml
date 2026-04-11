@@ -6,6 +6,7 @@ vars:
   GOARCH: amd64
   WEB_DIST_SOURCE: ../web/dist
   WEB_DIST_TARGET: ./web/dist
+  HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
   version-data:
@@ -32,7 +33,7 @@ tasks:
       - task: app
       - |
         context_dir=./image
-        repo_name=bitkit/wsgw-e2e-app
+        repo_name=bitkit/wsgw-e2e-app-go
         cp ./cmd/app ./$context_dir/wsgw-e2e-app
         docker build $context_dir -t $repo_name
         if which minikube && minikube status;
@@ -66,6 +67,7 @@ tasks:
         export E2EAPP_PASSWORD_CREDENTIALS="$pwcreds"
         export E2EAPP_WSGW_HOST=localhost
         export E2EAPP_WSGW_PORT=45679
+        export E2EAPP_HTTP2={{.HTTP2}}
         export E2EAPP_LOG_LEVEL=debug
         export E2EAPP_DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
 
@@ -97,6 +99,7 @@ tasks:
         export E2EAPP_PASSWORD_CREDENTIALS="$pwcreds"
         export E2EAPP_E2EAPP_WSGW_HOST=localhost
         export E2EAPP_E2EAPP_WSGW_PORT=45679
+        export E2EAPP_HTTP2={{.HTTP2}}
         export E2EAPP_E2EAPP_LOG_LEVEL=debug
         export E2EAPP_E2EAPP_DEV_LOG_FILE="{{.DEV_LOG_FILE}}"
 

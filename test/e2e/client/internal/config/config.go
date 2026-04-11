@@ -16,6 +16,7 @@ import (
 type Config struct {
 	ServerHostname        string
 	ServerPort            int
+	Http2                 bool
 	PasswordCredentials   []security.PasswordCredentials
 	WsgwUri               string
 	AppServiceUrl         string
@@ -56,6 +57,7 @@ func GetConfig(args []string) Config {
 	return Config{
 		ServerHostname:        k.String("SERVER_HOSTNAME"),
 		ServerPort:            k.Int("SERVER_PORT"),
+		Http2:                 k.Bool("HTTP2"),
 		PasswordCredentials:   pwdcreds, // parsed from PASSWORD_CREDENTIALS
 		WsgwUri:               k.String("WSGW_URI"),
 		AppServiceUrl:         k.String("APP_SERVICE_URL"),

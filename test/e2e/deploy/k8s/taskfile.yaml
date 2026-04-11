@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   NAMESPACE: '{{.NAMESPACE | default "wsgw-e2e" }}'
+  HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
   userdb:
@@ -28,6 +29,9 @@ tasks:
   app:
     cmds:
       - task: userdb
+      - kubectl -n {{.NAMESPACE}} create configmap wsgw-e2e-app-config
+          --from-literal=HTTP2={{.HTTP2}}
+          --dry-run=client -o yaml | kubectl -n {{.NAMESPACE}} apply -f -
       - |
         kubectl -n {{.NAMESPACE}} apply -f ./app/e2e-app.yaml
 
@@ -44,6 +48,9 @@ tasks:
   client:
     cmds:
       - task: userdb
+      - kubectl -n {{.NAMESPACE}} create configmap wsgw-e2e-client-config
+          --from-literal=HTTP2={{.HTTP2}}
+          --dry-run=client -o yaml | kubectl -n {{.NAMESPACE}} apply -f -
       - |
         kubectl -n {{.NAMESPACE}} apply -f ./client/e2e-client.yaml
 

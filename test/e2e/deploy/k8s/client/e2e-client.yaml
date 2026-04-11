@@ -24,6 +24,11 @@ spec:
               value: debug
             - name: E2ECLIENT_SERVER_PORT
               value: "8080"
+            - name: E2ECLIENT_HTTP2
+              valueFrom:
+                configMapKeyRef:
+                  name: wsgw-e2e-client-config
+                  key: HTTP2
             - name: E2ECLIENT_PASSWORD_CREDENTIALS
               valueFrom:
                 secretKeyRef:

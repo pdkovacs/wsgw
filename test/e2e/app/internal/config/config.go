@@ -16,6 +16,7 @@ import (
 type Config struct {
 	ServerHostname        string
 	ServerPort            int
+	Http2                 bool
 	ServerURLContext      string
 	SessionMaxAge         int
 	LoadBalancerAddress   string
@@ -68,6 +69,7 @@ func GetConfig(args []string) Config {
 	return Config{
 		ServerHostname:        k.String("SERVER_HOSTNAME"),
 		ServerPort:            k.Int("SERVER_PORT"),
+		Http2:                 k.Bool("HTTP2"),
 		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),
 		PasswordCredentials:   pwdcreds, // parsed from PASSWORD_CREDENTIALS
 		SessionDB:             k.String("SESSIONDB_NAME"),

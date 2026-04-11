@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: wsgw-e2e-app
-          image: bitkit/wsgw-e2e-app
+          image: bitkit/wsgw-e2e-app-go
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -30,6 +30,11 @@ spec:
               value: kabat
             - name: E2EAPP_SERVER_PORT
               value: "8080"
+            - name: E2EAPP_HTTP2
+              valueFrom:
+                configMapKeyRef:
+                  name: wsgw-e2e-app-config
+                  key: HTTP2
             - name: E2EAPP_PASSWORD_CREDENTIALS
               valueFrom:
                 secretKeyRef:

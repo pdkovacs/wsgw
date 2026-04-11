@@ -17,6 +17,7 @@ vars:
   GOOS: linux
   GOARCH: amd64
   WSGW_LOG_FILE: '{{.WSGW_LOG_FILE | default "$HOME/workspace/logs/wsgw" }}'
+  HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
   clean:
@@ -60,6 +61,7 @@ tasks:
         export WSGW_SERVER_PORT=45679
         export WSGW_APP_BASE_URL=http://localhost:45678
         export WSGW_LOAD_BALANCER_ADDRESS=localhost:5173
+        export WSGW_HTTP2={{.HTTP2}}
         export LOG_LEVEL=debug
         ./watch.sh
   image:

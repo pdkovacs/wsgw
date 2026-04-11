@@ -29,6 +29,11 @@ spec:
                   fieldPath: status.podIP
             - name: WSGW_SERVER_PORT
               value: "8080"
+            - name: WSGW_HTTP2
+              valueFrom:
+                configMapKeyRef:
+                  name: wsgw-config
+                  key: HTTP2
             - name: WSGW_INSTANCE_PROTOCOL
               value: "http"
             - name: WSGW_APP_BASE_URL

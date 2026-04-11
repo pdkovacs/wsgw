@@ -15,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type EndpointPath string
@@ -81,9 +83,15 @@ func (s *Server) start(serverCtx context.Context, configuration config.Config, r
 		ready(serverCtx, portAsInt, s.Stop)
 	}
 
+	var handler http.Handler = r
+	if configuration.Http2 {
+		handler = h2c.NewHandler(r, &http2.Server{})
+		logger.Info().Msg("HTTP/2 (h2c) enabled")
+	}
+
 	server := &http.Server{
 		BaseContext:       func(l net.Listener) context.Context { return serverCtx },
-		Handler:           r,
+		Handler:           handler,
 		ReadHeaderTimeout: 90 * time.Second,
 		ReadTimeout:       90 * time.Second,
 		WriteTimeout:      90 * time.Second,

@@ -13,6 +13,7 @@ import (
 type Config struct {
 	ServerHost            string
 	ServerPort            int
+	Http2                 bool
 	AppBaseUrl            string
 	AckNewConnWithConnId  bool
 	LoadBalancerAddress   string // TODO: remove this
@@ -47,6 +48,7 @@ func GetConfig(args []string) Config {
 	return Config{
 		ServerHost:            k.String("SERVER_HOST"),
 		ServerPort:            k.Int("SERVER_PORT"),
+		Http2:                 k.Bool("HTTP2"),
 		AppBaseUrl:            k.String("APP_BASE_URL"),
 		AckNewConnWithConnId:  k.Bool("ACK_NEW_CONN_WITH_CONN_ID"),
 		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),

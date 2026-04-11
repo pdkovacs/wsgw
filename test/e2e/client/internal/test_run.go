@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,29 +23,44 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/http2"
 )
 
 const (
 	numCoroutines int = 16
 )
 
-var transport = &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
-	MaxIdleConnsPerHost:   numCoroutines,
-	ResponseHeaderTimeout: 90 * time.Second,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 10 * time.Second,
-}
-
-var httpClient http.Client = http.Client{
-	Transport: transport,
-	Timeout:   90 * time.Second,
+func newHTTPClient(http2Enabled bool) *http.Client {
+	var transport http.RoundTripper
+	if http2Enabled {
+		transport = &http2.Transport{
+			AllowHTTP: true,
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				return (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext(ctx, network, addr)
+			},
+		}
+	} else {
+		transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConnsPerHost:   numCoroutines,
+			ResponseHeaderTimeout: 90 * time.Second,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 10 * time.Second,
+		}
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   90 * time.Second,
+	}
 }
 
 type testRun struct {
@@ -55,9 +71,10 @@ type testRun struct {
 	monitoring        *clientMonitoring
 	clients           []*client
 	notifyCompleted   func()
+	httpClient        *http.Client
 }
 
-func newTestRun(userCount int, testDataPartionCount int, notifyCompleted func()) *testRun {
+func newTestRun(userCount int, testDataPartionCount int, notifyCompleted func(), http2Enabled bool) *testRun {
 	runId := uuid.NewString()
 	monitoring := createMetrics(runId)
 
@@ -68,6 +85,7 @@ func newTestRun(userCount int, testDataPartionCount int, notifyCompleted func())
 		dlvrTracker:       newDeliveryTracker(),
 		monitoring:        monitoring,
 		notifyCompleted:   notifyCompleted,
+		httpClient:        newHTTPClient(http2Enabled),
 	}
 }
 
@@ -184,7 +202,7 @@ func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMe
 
 	monitoring.InjectIntoHeader(ctx, req.Header)
 
-	response, sendReqErr := httpClient.Do(req)
+	response, sendReqErr := r.httpClient.Do(req)
 	if sendReqErr != nil {
 		logger.Error().Err(sendReqErr).Msgf("failed to send request: %#v", sendReqErr)
 		return sendReqErr

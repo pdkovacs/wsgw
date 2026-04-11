@@ -24,6 +24,8 @@ import (
 	"github.com/gin-contrib/sessions/postgres"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 const BadCredential = "bad-credential"
@@ -50,7 +52,7 @@ func NewServer(getwsgw func() string) server {
 // SetupAndStart sets up and starts server.
 func (s *server) Start(serverCtx context.Context, conf config.Config, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
 	r := s.initEndpoints(serverCtx, conf)
-	return s.start(serverCtx, conf.ServerPort, r, ready)
+	return s.start(serverCtx, conf.ServerPort, conf.Http2, r, ready)
 }
 
 // Stop kills the listener
@@ -189,7 +191,7 @@ func (s *server) createSessionStore(ctx context.Context, connProps config.DbConn
 }
 
 // start starts the service
-func (s *server) start(serverCtx context.Context, portRequested int, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
+func (s *server) start(serverCtx context.Context, portRequested int, http2Enabled bool, r http.Handler, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
 	logger := zerolog.Ctx(serverCtx).With().Logger()
 	logger.Info().Msg("Starting listener....")
 
@@ -213,9 +215,15 @@ func (s *server) start(serverCtx context.Context, portRequested int, r http.Hand
 		ready(serverCtx, portAsInt, s.Stop)
 	}
 
+	var handler http.Handler = r
+	if http2Enabled {
+		handler = h2c.NewHandler(r, &http2.Server{})
+		logger.Info().Msg("HTTP/2 (h2c) enabled")
+	}
+
 	s.server = &http.Server{
 		BaseContext:  func(l net.Listener) context.Context { return serverCtx },
-		Handler:      r,
+		Handler:      handler,
 		ReadTimeout:  0,
 		WriteTimeout: 0,
 		IdleTimeout:  90 * time.Second,

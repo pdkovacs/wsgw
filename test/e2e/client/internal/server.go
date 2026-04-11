@@ -137,7 +137,7 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		runContext = tmpCtx
 		defer span.End()
 
-		run := newTestRun(userCount, testDataChunkSize, notifyDone)
+		run := newTestRun(userCount, testDataChunkSize, notifyDone, conf.Http2)
 		span.SetAttributes(attribute.KeyValue{Key: "runId", Value: attribute.StringValue(run.runId)})
 		runContext = logger.With().Str("runId", run.runId).Logger().WithContext(runContext)
 

@@ -5,10 +5,14 @@ env:
 
 vars:
   NAMESPACE: '{{.NAMESPACE | default "default" }}'
+  HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
   single:
     cmds:
+      - kubectl -n {{.NAMESPACE}} create configmap wsgw-config
+          --from-literal=HTTP2={{.HTTP2}}
+          --dry-run=client -o yaml | kubectl -n {{.NAMESPACE}} apply -f -
       - kubectl -n {{.NAMESPACE}} apply -f wsgw-deployment.yaml
       - kubectl -n {{.NAMESPACE}} apply -f wsgw-service.yaml
       - kubectl -n {{.NAMESPACE}} rollout restart deployment wsgw
