@@ -136,6 +136,7 @@ func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*mess
 			// the test-app will basically ignore this for now, it will start a new root context for each push
 			TraceData: monitoring.InjectTraceData(ctx),
 		}
+		msgDto.SetSentAt()
 
 		messagesToSend = append(messagesToSend, msgDto)
 	}
