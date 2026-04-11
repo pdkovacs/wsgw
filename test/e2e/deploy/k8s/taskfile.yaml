@@ -1,6 +1,7 @@
 version: "3"
 
 vars:
+  NAMESPACE: '{{.NAMESPACE | default "wsgw-e2e" }}'
 
 tasks:
   userdb:
@@ -20,39 +21,39 @@ tasks:
         pwcreds="${pwcreds}]"
         echo "pwcreds: $pwcreds"
 
-        if ! kubectl get secrets wsgw-e2e-app-users > /dev/null;
+        if ! kubectl -n {{.NAMESPACE}} get secrets wsgw-e2e-app-users > /dev/null;
         then
-          kubectl create secret generic wsgw-e2e-app-users "--from-literal=PASSWORD_CREDENTIALS=$pwcreds"
+          kubectl -n {{.NAMESPACE}} create secret generic wsgw-e2e-app-users "--from-literal=PASSWORD_CREDENTIALS=$pwcreds"
         fi
   app:
     cmds:
       - task: userdb
       - |
-        kubectl apply -f ./app/e2e-app.yaml
+        kubectl -n {{.NAMESPACE}} apply -f ./app/e2e-app.yaml
 
         echo "==== Rescaling wsgw-e2e-app, maybe...."
         app_scale="{{.E2EAPP_SCALE}}"
         if [ -z "$app_scale" ]; then
           echo "E2EAPP_SCALE not set; redploying wsgw-e2e-app with the current scale..."
-          kubectl rollout restart deployment wsgw-e2e-app
+          kubectl -n {{.NAMESPACE}} rollout restart deployment wsgw-e2e-app
         else
           echo "Rescaling wsgw-e2e-app to $app_scale"
-          kubectl scale deployment wsgw-e2e-app --replicas 0
-          kubectl scale deployment wsgw-e2e-app --replicas $app_scale
+          kubectl -n {{.NAMESPACE}} scale deployment wsgw-e2e-app --replicas 0
+          kubectl -n {{.NAMESPACE}} scale deployment wsgw-e2e-app --replicas $app_scale
         fi
   client:
     cmds:
       - task: userdb
       - |
-        kubectl apply -f ./client/e2e-client.yaml
+        kubectl -n {{.NAMESPACE}} apply -f ./client/e2e-client.yaml
 
         echo "==== Rescaling wsgw-e2e-client, maybe...."
         client_scale="{{.E2ECLIENT_SCALE}}"
         if [ -z "$client_scale" ]; then
           echo "E2ECLIENT_SCALE not set; redploying wsgw-e2e-client with the current scale..."
-          kubectl rollout restart deployment wsgw-e2e-client
+          kubectl -n {{.NAMESPACE}} rollout restart deployment wsgw-e2e-client
         else
           echo "Rescaling wsgw-e2e-client to $client_scale"
-          kubectl scale deployment wsgw-e2e-client --replicas 0
-          kubectl scale deployment wsgw-e2e-client --replicas $client_scale
+          kubectl -n {{.NAMESPACE}} scale deployment wsgw-e2e-client --replicas 0
+          kubectl -n {{.NAMESPACE}} scale deployment wsgw-e2e-client --replicas $client_scale
         fi
