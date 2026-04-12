@@ -116,8 +116,13 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 	}
 	wg.Wait()
 
+	tracer := otel.Tracer(config.OtelScope)
 	for _, cli := range clients {
 		msg := cli.createMessage(ctx, allUserNames)
+		// Span is created here — before the message enters pendingDeliveries and before
+		// any HTTP request is sent — so processMsgFromApp can safely call span.AddEvent
+		// without a data race on msg.span.
+		_, msg.span = tracer.Start(ctx, "request-sending-message", trace.WithAttributes(attribute.String("runId", r.runId)))
 		r.dlvrTracker.pendingDeliveries[msg.id] = msg
 	}
 
@@ -159,20 +164,10 @@ func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*mess
 		messagesToSend = append(messagesToSend, msgDto)
 	}
 
-	tracer := otel.Tracer(config.OtelScope)
-	for _, msg := range allMessages {
-		_, msg.span = tracer.Start(
-			ctx,
-			"request-sending-message",
-			trace.WithAttributes(attribute.String("runId", r.runId)),
-		)
-	}
-
 	var errs error
 
 	var wg sync.WaitGroup
 	for c := range slices.Chunk(messagesToSend, r.testDataChunkSize) {
-		fmt.Printf(">>>>>>>>>>>>>>>> chunk size: %d\n", len(c))
 		wg.Go(func() {
 			if err := r.sendTestDataChunk(ctx, c, endpoint, epCredentials); err != nil {
 				errs = errors.Join(errs, err)

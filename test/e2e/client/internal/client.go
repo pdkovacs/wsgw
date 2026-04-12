@@ -6,12 +6,9 @@ import (
 	"fmt"
 	math_rand "math/rand"
 	"time"
-	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/pgks/security"
-	"wsgw/test/e2e/client/internal/config"
 
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -111,54 +108,59 @@ func (cli *client) processMsgFromApp(ctx context.Context, msgFromAppStr string) 
 		return
 	}
 
-	logger = logger.With().Str("msgId", msgFromApp.Id).Str("destination", msgFromApp.Destination).Logger()
+	logger = logger.With().Str("msgId", msgFromApp.Id).Str("destination", msgFromApp.Destination).Str("sender", msgFromApp.Sender).Logger()
 
-	ctx = monitoring.ExtractTraceData(ctx, msgFromApp.TraceData)
-	tracer := otel.Tracer(config.OtelScope)
-	deliveryCtx, deliverySpan := tracer.Start(
-		ctx,
-		"client-received-message",
-		trace.WithAttributes(
-			attribute.String("runId", msgFromApp.TestRunId),
-			attribute.KeyValue{Key: "msgId", Value: attribute.StringValue(msgFromApp.Id)},
-			attribute.KeyValue{Key: "destination", Value: attribute.StringValue(msgFromApp.Destination)},
-		),
-	)
-	var msgDone *message
-	defer func() {
-		if msgDone != nil {
-			msgDone.span.End()
-		}
-		deliverySpan.End()
-	}()
-
-	logger = logger.With().Str("sender", msgFromApp.Sender).Logger()
 	msgInRepo := cli.outsandingMessages.get(msgFromApp.Id)
 	if msgInRepo == nil {
-		cli.monitoring.incOutstandingMsgNotFoundCounter(deliveryCtx)
-		deliverySpan.SetStatus(codes.Error, "incoming message not found amongst outstanding")
+		logger.Error().Msg("incoming message not found amongst outstanding")
+		cli.monitoring.incOutstandingMsgNotFoundCounter(ctx)
 		return
 	}
 
-	msgDone = cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username))
-
-	if msgInRepo.text != msgFromApp.Data {
-		cli.monitoring.incdMsgTextMismatchCounter(deliveryCtx)
-	}
-
+	// AddEvent before markDelivered so the span is guaranteed to still be open:
+	// span.End() is deferred by the goroutine that receives the last delivery (i.e.
+	// markDelivered returns non-nil), and markDelivered can only return non-nil after
+	// every recipient has called it — meaning every goroutine has already AddEvent'd.
 	sentAt, timeParsingErr := msgFromApp.GetSentAt()
 	if timeParsingErr != nil {
 		logger.Error().Err(timeParsingErr).Msg("failed to parse sentAt time")
-		deliverySpan.SetStatus(codes.Error, "failed to parse sentAt time")
+		msgInRepo.span.SetStatus(codes.Error, "failed to parse sentAt time")
+		msgInRepo.span.AddEvent("delivery-error",
+			trace.WithAttributes(
+				attribute.String("destination", msgFromApp.Destination),
+				attribute.String("reason", "failed to parse sentAt"),
+			),
+		)
+		// Must still mark delivered so this recipient doesn't block testRunDone forever.
+		if msgDone := cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username)); msgDone != nil {
+			msgDone.span.End()
+		}
 		return
 	}
 
 	deliveryDuration := receivedAt.Sub(sentAt)
 	logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("recording duration")
+
+	eventAttrs := []attribute.KeyValue{
+		attribute.String("destination", msgFromApp.Destination),
+		attribute.Int64("deliveryDurationMs", deliveryDuration.Milliseconds()),
+	}
+	if msgInRepo.text != msgFromApp.Data {
+		cli.monitoring.incdMsgTextMismatchCounter(ctx)
+		eventAttrs = append(eventAttrs, attribute.Bool("textMismatch", true))
+		msgInRepo.span.SetStatus(codes.Error, "message text mismatch")
+	}
 	if deliveryDuration.Milliseconds() > 400 {
 		logger.Debug().Dur("deliveryDuration", deliveryDuration).Msg("extra slow")
+		eventAttrs = append(eventAttrs, attribute.Bool("slow", true))
 	}
-	cli.monitoring.recordDeliveryDurationMs(deliveryCtx, deliveryDuration)
-	cli.monitoring.recordDeliveryDurationUs(deliveryCtx, deliveryDuration)
-	deliverySpan.SetStatus(codes.Ok, "incoming message successfully processed")
+	msgInRepo.span.AddEvent("delivered", trace.WithAttributes(eventAttrs...))
+
+	msgDone := cli.outsandingMessages.markDelivered(msgFromApp.Id, recipientName(cli.credentials.Username))
+	if msgDone != nil {
+		msgDone.span.End()
+	}
+
+	cli.monitoring.recordDeliveryDurationMs(ctx, deliveryDuration)
+	cli.monitoring.recordDeliveryDurationUs(ctx, deliveryDuration)
 }

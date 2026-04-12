@@ -33,7 +33,7 @@ func main() {
 	conf := config.GetConfig(os.Args)
 	logger.Info().Any("parsed conf", conf).Send()
 
-	monitoring.InitOtel(
+	shutdownOtel := monitoring.InitOtel(
 		ctx,
 		monitoring.OtelConfig{
 			OtlpEndpoint:         conf.OtlpEndpoint,
@@ -43,6 +43,7 @@ func main() {
 		},
 		config.OtelScope,
 	)
+	defer shutdownOtel(context.Background())
 
 	srvErr := internal.CreateStartServer(ctx, conf)
 	logger.Info().Msgf("server returned with %v\n", srvErr)

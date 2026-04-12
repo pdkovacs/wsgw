@@ -40,12 +40,13 @@ func main() {
 	if serverWanted {
 		conf := config.GetConfig(os.Args)
 
-		monitoring.InitOtel(ctx, monitoring.OtelConfig{
+		shutdownOtel := monitoring.InitOtel(ctx, monitoring.OtelConfig{
 			OtlpEndpoint:         conf.OtlpEndpoint,
 			OtlpServiceNamespace: conf.OtlpServiceNamespace,
 			OtlpServiceName:      conf.OtlpServiceName,
 			OtlpTraceSampleAll:   conf.OtlpTraceSampleAll,
 		}, config.OtelScope)
+		defer shutdownOtel(context.Background())
 
 		var shutdownServer func() error
 

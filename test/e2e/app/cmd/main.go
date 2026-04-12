@@ -37,11 +37,12 @@ func main() {
 	conf := config.GetConfig(os.Args)
 	logger.Info().Any("parsed config", conf).Send()
 
-	monitoring.InitOtel(ctx, monitoring.OtelConfig{
+	shutdownOtel := monitoring.InitOtel(ctx, monitoring.OtelConfig{
 		OtlpEndpoint:         conf.OtlpEndpoint,
 		OtlpServiceNamespace: conf.OtlpServiceNamespace,
 		OtlpServiceName:      conf.OtlpServiceName,
 	}, config.OtelScope)
+	defer shutdownOtel(context.Background())
 
 	var shutdownServer func() error
 

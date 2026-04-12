@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -28,12 +29,16 @@ type OtelConfig struct {
 	OtlpTraceSampleAll   bool
 }
 
-func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
+// InitOtel initialises the global OTel metric and trace providers.
+// The returned function must be called before the process exits (e.g. via defer)
+// to flush in-flight spans/metrics and shut down the exporters cleanly.
+// If no OTLP endpoint is configured a no-op shutdown function is returned.
+func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) func(context.Context) error {
 	logger := zerolog.Ctx(ctx).With().Str("OtlpEndpoint", conf.OtlpEndpoint).Logger()
 
 	if len(conf.OtlpEndpoint) == 0 {
 		logger.Info().Msg("No OTLP endpoint, skipping...")
-		return
+		return func(context.Context) error { return nil }
 	}
 
 	logger.Info().Msg("starting...")
@@ -88,8 +93,17 @@ func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 		panic(err)
 	}
 
+	// Default batcher limits (MaxQueueSize=2048, MaxExportBatchSize=512) are far
+	// too small for high-concurrency runs (e.g. 512 users × ~384 recipients ≈ 400K
+	// spans per run). Spans overflowing the queue are silently dropped, breaking
+	// the trace chain. Size the queue to absorb a full run; at ~200 bytes/span
+	// 500K slots ≈ 100MB peak — acceptable for a test/dev workload.
 	traceOptions := []sdktrace.TracerProviderOption{
-		sdktrace.WithBatcher(traceExporter),
+		sdktrace.WithBatcher(traceExporter,
+			sdktrace.WithMaxQueueSize(500_000),
+			sdktrace.WithMaxExportBatchSize(10_000),
+			sdktrace.WithBatchTimeout(2*time.Second),
+		),
 		sdktrace.WithResource(res),
 	}
 	if conf.OtlpTraceSampleAll {
@@ -99,6 +113,10 @@ func InitOtel(ctx context.Context, conf OtelConfig, otelScope string) {
 		traceOptions...,
 	)
 	otel.SetTracerProvider(tp)
+
+	return func(shutdownCtx context.Context) error {
+		return errors.Join(tp.Shutdown(shutdownCtx), provider.Shutdown(shutdownCtx))
+	}
 }
 
 func CreateCounter(otelScope string, name string, description string, options ...metric_api.Int64CounterOption) metric_api.Int64Counter {
