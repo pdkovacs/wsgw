@@ -1,5 +1,9 @@
+variable "dynamodb_url" {
+  default = "http://dynamodb-local:8000"
+}
+
 locals {
-  dynamodb_url = "http://dynamodb-local:8000"
+  dynamodb_url = var.dynamodb_url
 }
 
 provider "aws" {

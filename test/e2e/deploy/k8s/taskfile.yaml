@@ -5,6 +5,26 @@ vars:
   HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
+  dynamodb:
+    cmds:
+      - kubectl -n {{.NAMESPACE}} apply -f ./dynamodb/dyamodb.yaml
+      - kubectl -n {{.NAMESPACE}} wait --for=condition=available --timeout=120s deployment/dynamodb-local
+      - |
+        pkill -f "port-forward service/dynamodb-local" 2>/dev/null || true
+        kubectl -n {{.NAMESPACE}} port-forward service/dynamodb-local 8000:8000 &
+        PF_PID=$!
+        trap "/bin/kill $PF_PID 2>/dev/null" EXIT
+        until nc -z localhost 8000 2>/dev/null; do sleep 0.2; done
+        AWS_ACCESS_KEY_ID=mockAccessKey AWS_SECRET_ACCESS_KEY=mockSecretKey \
+          aws --endpoint-url=http://localhost:8000 --region eu-west-1 --no-cli-pager \
+          dynamodb describe-table --table-name WsgwConnectionIds > /dev/null 2>&1 \
+        || AWS_ACCESS_KEY_ID=mockAccessKey AWS_SECRET_ACCESS_KEY=mockSecretKey \
+          aws --endpoint-url=http://localhost:8000 --region eu-west-1 --no-cli-pager \
+          dynamodb create-table \
+          --table-name WsgwConnectionIds \
+          --attribute-definitions AttributeName=UserId,AttributeType=S AttributeName=ConnectionId,AttributeType=S \
+          --key-schema AttributeName=UserId,KeyType=HASH AttributeName=ConnectionId,KeyType=RANGE \
+          --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
   userdb:
     cmds:
       - |

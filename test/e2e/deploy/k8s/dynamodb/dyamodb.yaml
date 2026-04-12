@@ -9,6 +9,9 @@ spec:
     storage: 5Gi
   hostPath:
     path: /data/dynamodb/
+  claimRef:
+    namespace: wsgw-e2e
+    name: dynamodb-pv-claim
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
