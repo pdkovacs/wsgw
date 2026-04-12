@@ -128,8 +128,9 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		}
 
 		testRunDone := make(chan struct{})
+		var notifyDoneOnce sync.Once
 		notifyDone := func() {
-			close(testRunDone)
+			notifyDoneOnce.Do(func() { close(testRunDone) })
 		}
 
 		tracer := otel.Tracer(config.OtelScope)
