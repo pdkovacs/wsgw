@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 	wsgw "wsgw/internal"
 	"wsgw/pkgs/monitoring"
@@ -75,7 +77,14 @@ func initEndpoints(conf config.Config) *gin.Engine {
 }
 
 func runTestHandler(conf config.Config) func(g *gin.Context) {
+	var runInProgress atomic.Bool
 	return func(g *gin.Context) {
+		if !runInProgress.CompareAndSwap(false, true) {
+			g.AbortWithStatus(http.StatusTooManyRequests)
+			return
+		}
+		defer runInProgress.Store(false)
+
 		runContext, cancel := context.WithCancelCause(context.WithoutCancel(g.Request.Context()))
 		defer cancel(fmt.Errorf("The request handler is returning to its caller"))
 
