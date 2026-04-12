@@ -126,7 +126,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 		authorizedGroup.GET("/users", userListHandler(userService, conf.PasswordCredentials))
 
 		apiGroup := authorizedGroup.Group("/api")
-		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections)
+		apiHandler := newAPIHandler(config.GetWsgwUrl(conf), wsConnections, conf.Http2)
 		apiGroup.POST("/message", apiHandler.messageHandler())
 		apiGroup.POST("/messages-in-bulk", apiHandler.sendInBulk())
 

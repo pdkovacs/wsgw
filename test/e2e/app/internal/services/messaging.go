@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,32 +21,53 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/http2"
 )
 
 const (
 	numCoroutines int = 16
 )
 
-var transport = &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
-	MaxIdleConnsPerHost:   numCoroutines,
-	ResponseHeaderTimeout: 90 * time.Second,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 10 * time.Second,
+// NewWsgwHttpClient returns an HTTP client tuned for sending messages to wsgw.
+// When http2Enabled is true the client speaks h2c (HTTP/2 cleartext), multiplexing
+// all concurrent sends over a single TCP connection — eliminating the per-host
+// connection-count pressure that causes ephemeral-port exhaustion under high load.
+// When false it falls back to an HTTP/1.1 client with a connection pool sized to
+// the worker concurrency (numCoroutines).
+func NewWsgwHttpClient(http2Enabled bool) http.Client {
+	if http2Enabled {
+		return http.Client{
+			Transport: &http2.Transport{
+				AllowHTTP: true,
+				DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+					return (&net.Dialer{
+						Timeout:   30 * time.Second,
+						KeepAlive: 30 * time.Second,
+					}).DialContext(ctx, network, addr)
+				},
+			},
+			Timeout: 90 * time.Second,
+		}
+	}
+	return http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConnsPerHost:   numCoroutines,
+			ResponseHeaderTimeout: 90 * time.Second,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 10 * time.Second,
+		},
+		Timeout: 90 * time.Second,
+	}
 }
 
-var httpClient http.Client = http.Client{
-	Transport: transport,
-	Timeout:   90 * time.Second,
-}
-
-func SendMessage(ctx context.Context, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
+func SendMessage(ctx context.Context, httpClient http.Client, wsgwUrl string, userId string, message *dto.E2EMessage, wsConnIds []string, discardConnId func(connId string)) error {
 	logger0 := zerolog.Ctx(ctx).With().Str("wsgwUrl", wsgwUrl).Logger()
 	logger0.Debug().Str("recipient", userId).Any("msg", message).Int("targetConnectionCount", len(wsConnIds)).Msg("message to send...")
 

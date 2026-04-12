@@ -26,16 +26,19 @@ type APIHandler struct {
 	wsgwUrl       string
 	wsConnections conntrack.WsConnections
 	metrics       *apiHandlerMetrics
+	httpClient    http.Client
 }
 
 func newAPIHandler(
 	wsgwUrl string,
 	wsConnections conntrack.WsConnections,
+	http2Enabled bool,
 ) *APIHandler {
 	return &APIHandler{
 		wsgwUrl:       wsgwUrl,
 		wsConnections: wsConnections,
 		metrics:       newAPIHandlerMetrics(),
+		httpClient:    services.NewWsgwHttpClient(http2Enabled),
 	}
 }
 
@@ -153,7 +156,7 @@ func (h *APIHandler) sendMessage(ctx context.Context, messageIn *dto.E2EMessage)
 	wgWorkUnits := sync.WaitGroup{}
 	wgWorkUnits.Add(len(messageIn.Recipients))
 
-	var status int
+	status := http.StatusNoContent
 	var errs error
 
 	worker := func(id int) {
@@ -251,7 +254,7 @@ func (h *APIHandler) sendMessageToUserDevices(ctx context.Context, message *dto.
 
 	findDevicesSpan.End()
 
-	errProcessMessage := services.SendMessage(ctx, h.wsgwUrl, userId, message, wsConnIds, deleteConnId)
+	errProcessMessage := services.SendMessage(ctx, h.httpClient, h.wsgwUrl, userId, message, wsConnIds, deleteConnId)
 
 	if errProcessMessage != nil {
 		var badRequest *app_errors.BadRequest
