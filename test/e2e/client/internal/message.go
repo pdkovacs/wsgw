@@ -19,6 +19,7 @@ type message struct {
 	recipients []recipientName
 	sentAt     time.Time
 	span       trace.Span
+	traceData  map[string]string
 }
 
 func parseMsg(msgStr string) (*dto.E2EMessage, error) {

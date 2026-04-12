@@ -70,3 +70,18 @@ The following sample is fairly representative of the proportions between duratio
 ![alt text](image-6.png)
 
 ----
+
+#### MILESTONE-2
+
+* Random messages from 1024 users to 780k destinations in total takes about 1 minute 15 seconds
+
+
+
+```
+time curl -i -u 'user1:crixcrax1' -X POST 'http://wsgw-e2e-client.internal/run?timeout=5m&user-count=256'
+
+```
+
+
+![alt text](image-3.png)
+

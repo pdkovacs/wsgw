@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 )
@@ -122,7 +123,14 @@ func (r *testRun) createConnectRunClients(ctx context.Context, conf config.Confi
 		// Span is created here — before the message enters pendingDeliveries and before
 		// any HTTP request is sent — so processMsgFromApp can safely call span.AddEvent
 		// without a data race on msg.span.
-		_, msg.span = tracer.Start(ctx, "request-sending-message", trace.WithAttributes(attribute.String("runId", r.runId)))
+		msgTraceCtx, msgSpan := tracer.Start(
+			ctx,
+			"request-sending-message",
+			trace.WithNewRoot(),
+			trace.WithAttributes(attribute.String("runId", r.runId)),
+		)
+		msg.span = msgSpan
+		msg.traceData = monitoring.InjectTraceData(msgTraceCtx)
 		r.dlvrTracker.pendingDeliveries[msg.id] = msg
 	}
 
@@ -156,8 +164,10 @@ func (r *testRun) sendTestData(ctx context.Context, allMessages map[string]*mess
 			Sender:     msg.sender.Username,
 			Recipients: recips,
 			Data:       msg.text,
-			// the test-app will basically ignore this for now, it will start a new root context for each push
-			TraceData: monitoring.InjectTraceData(ctx),
+			TraceData:  msg.traceData,
+		}
+		if len(msgDto.TraceData) == 0 {
+			msgDto.TraceData = monitoring.InjectTraceData(ctx)
 		}
 		msgDto.SetSentAt()
 
@@ -213,4 +223,17 @@ func (r *testRun) sendTestDataChunk(ctx context.Context, chunkToSend []dto.E2EMe
 	}
 
 	return nil
+}
+
+func (r *testRun) forceEndOutstandingMessageSpans(reason string) int {
+	outstanding := r.dlvrTracker.drainPending()
+	for _, msg := range outstanding {
+		msg.span.SetStatus(codes.Error, reason)
+		msg.span.AddEvent(
+			"forced-end",
+			trace.WithAttributes(attribute.String("reason", reason)),
+		)
+		msg.span.End()
+	}
+	return len(outstanding)
 }

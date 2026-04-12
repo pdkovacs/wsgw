@@ -80,6 +80,19 @@ func (mr *deliveryTracker) watchDraining(notifyEmpty func()) {
 	mr.notifyEmpty = notifyEmpty
 }
 
+func (mr *deliveryTracker) drainPending() []*message {
+	mr.lock.Lock()
+	defer mr.lock.Unlock()
+
+	drained := make([]*message, 0, len(mr.pendingDeliveries))
+	for msgId, msg := range mr.pendingDeliveries {
+		drained = append(drained, msg)
+		delete(mr.pendingDeliveries, msgId)
+	}
+
+	return drained
+}
+
 func selectRecipients(candidates []string, howMany int) []string {
 	n := len(candidates)
 	if howMany >= n {

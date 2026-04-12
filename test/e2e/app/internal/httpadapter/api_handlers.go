@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"wsgw/internal/app_errors"
+	"wsgw/pkgs/monitoring"
 	"wsgw/test/e2e/app/internal/config"
 	"wsgw/test/e2e/app/internal/conntrack"
 	"wsgw/test/e2e/app/internal/services"
@@ -69,6 +70,9 @@ func (h *APIHandler) messageHandler() func(g *gin.Context) {
 		}
 
 		ctx := requestCtx
+		if len(messageIn.TraceData) > 0 {
+			ctx = monitoring.ExtractTraceData(ctx, messageIn.TraceData)
+		}
 
 		tracer := otel.Tracer(config.OtelScope)
 		tmpCtx, handleMsgReqSpan := tracer.Start(ctx, "handle-send-message-request")
@@ -123,14 +127,16 @@ func (h *APIHandler) sendInBulk() func(g *gin.Context) {
 		}
 		h.metrics.messageRequestCounter.Add(requestCtx, int64(len(allMessages)), metric.WithAttributes(attribute.String("runId", allMessages[0].TestRunId)))
 
-		ctx := requestCtx
-
 		var errs error
 		var sendErrs error
 
 		logger.Debug().Int("msgCount", len(allMessages)).Msg("sending messages")
 		for _, messageIn := range allMessages {
-			status, sendErrs = h.sendMessage(ctx, &messageIn)
+			msgCtx := requestCtx
+			if len(messageIn.TraceData) > 0 {
+				msgCtx = monitoring.ExtractTraceData(msgCtx, messageIn.TraceData)
+			}
+			status, sendErrs = h.sendMessage(msgCtx, &messageIn)
 			errs = errors.Join(errs, sendErrs)
 		}
 
