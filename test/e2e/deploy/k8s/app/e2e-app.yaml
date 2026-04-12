@@ -24,6 +24,8 @@ spec:
               value: debug
             - name: E2EAPP_DYNAMODB_URL
               value: http://dynamodb-local:8000
+            - name: E2EAPP_VALKEY_URL
+              value: redis://valkey:6379
             - name: AWS_ACCESS_KEY_ID
               value: kalap
             - name: AWS_SECRET_ACCESS_KEY

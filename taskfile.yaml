@@ -99,6 +99,5 @@ tasks:
   cluster:
     cmds:
       - task: image
-      - kubectl apply -f deploy/k8s/redis-config.yaml
-      - kubectl apply -f deploy/k8s/redis-deployment.yaml
-      - kubectl apply -f deploy/k8s/redis-service.yaml
+      - kubectl apply -f deploy/k8s/valkey-deployment.yaml
+      - kubectl apply -f deploy/k8s/valkey-service.yaml

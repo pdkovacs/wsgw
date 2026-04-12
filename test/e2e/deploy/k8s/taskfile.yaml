@@ -49,6 +49,9 @@ tasks:
   app:
     cmds:
       - task: userdb
+      - kubectl -n {{.NAMESPACE}} apply -f ../../../../deploy/k8s/valkey-deployment.yaml
+      - kubectl -n {{.NAMESPACE}} apply -f ../../../../deploy/k8s/valkey-service.yaml
+      - kubectl -n {{.NAMESPACE}} wait --for=condition=available --timeout=120s deployment/valkey
       - kubectl -n {{.NAMESPACE}} create configmap wsgw-e2e-app-config
           --from-literal=HTTP2={{.HTTP2}}
           --dry-run=client -o yaml | kubectl -n {{.NAMESPACE}} apply -f -
