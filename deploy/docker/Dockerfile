@@ -1,16 +1,16 @@
-FROM ubuntu:22.04
+FROM debian:12-slim
 
 LABEL Name="wsgw"
 LABEL Version="1.0.0"
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl iproute2 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd -m --shell /bin/false wsgw
 
-RUN apt-get update && apt-get install -y git curl iproute2 && apt-get clean
-RUN mkdir -p /opt/wsgw
 WORKDIR /opt/wsgw
 COPY --chown=root:root --chmod=555 wsgw ./
-RUN chmod +x wsgw
-RUN ls -la /opt/
 EXPOSE 8080
 
 USER wsgw

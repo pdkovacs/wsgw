@@ -1,6 +1,8 @@
-FROM ubuntu
+FROM debian:12-slim
 
-RUN apt-get update && apt-get install iproute2 netcat-traditional dnsutils curl -y
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends iproute2 netcat-traditional dnsutils curl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -u 1101 -m --shell /bin/false wsgw
 
