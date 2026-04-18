@@ -115,6 +115,8 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
+	configureAppHTTPClient(configuration.Http2)
+
 	rootEngine := gin.Default()
 
 	rootEngine.Use(RequestLogger("websocketGatewayServer"))

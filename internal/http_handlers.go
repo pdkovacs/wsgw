@@ -3,10 +3,12 @@ package wsgw
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 	"wsgw/internal/config"
@@ -17,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/net/http2"
 )
 
 // TODO: make this configurable?
@@ -62,6 +65,21 @@ var httpClient http.Client = http.Client{
 	Timeout: time.Second * 15,
 }
 
+func configureAppHTTPClient(http2Enabled bool) {
+	if !http2Enabled {
+		return
+	}
+	httpClient.Transport = &http2.Transport{
+		AllowHTTP: true,
+		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+			return (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext(ctx, network, addr)
+		},
+	}
+}
+
 type appConnection struct {
 	id         ConnectionID
 	httpClient http.Client
@@ -81,6 +99,12 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 		return nil, errAppConnInternal
 	}
 	request.Header = r.Header.Clone()
+	// Strip HTTP/1.1 hop-by-hop headers from the WS upgrade so this auth/validation
+	// relay is valid over HTTP/2 (forbidden by RFC 7540 §8.1.2.2). The actual WS
+	// upgrade happens between the client and wsgw, not on this leg.
+	for _, h := range []string{"Upgrade", "Connection", "Sec-Websocket-Key", "Sec-Websocket-Version", "Sec-Websocket-Extensions", "Sec-Websocket-Protocol"} {
+		request.Header.Del(h)
+	}
 
 	connId := createConnectionId(r.Context())
 
