@@ -3,6 +3,8 @@ version: "3"
 vars:
   NAMESPACE: '{{.NAMESPACE | default "wsgw-e2e" }}'
   HTTP2: '{{.HTTP2 | default "false"}}'
+  CONNECTION_TRACKING: '{{.CONNECTION_TRACKING | default "valkey"}}'
+  CONNECTION_TRACKING_URL: '{{.CONNECTION_TRACKING_URL | default "redis://valkey:6379"}}'
 
 tasks:
   dynamodb:
@@ -54,6 +56,8 @@ tasks:
       - kubectl -n {{.NAMESPACE}} wait --for=condition=available --timeout=120s deployment/valkey
       - kubectl -n {{.NAMESPACE}} create configmap wsgw-e2e-app-config
           --from-literal=HTTP2={{.HTTP2}}
+          --from-literal=CONNECTION_TRACKING={{.CONNECTION_TRACKING}}
+          --from-literal=CONNECTION_TRACKING_URL={{.CONNECTION_TRACKING_URL}}
           --dry-run=client -o yaml | kubectl -n {{.NAMESPACE}} apply -f -
       - |
         kubectl -n {{.NAMESPACE}} apply -f ./app/e2e-app.yaml

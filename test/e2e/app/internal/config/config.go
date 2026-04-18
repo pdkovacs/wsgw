@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -28,8 +29,7 @@ type Config struct {
 	DBUser                string
 	DBPassword            string
 	UsernameCookie        string
-	DynamodbURL           string
-	ValkeyURL             string
+	ConnectionTracking    ConnectionTrackingConfig
 	WsgwHost              string
 	WsgwPort              int
 	OtlpEndpoint          string
@@ -41,10 +41,58 @@ type Config struct {
 
 const envNamePrefix = "E2EAPP_"
 
-func GetConfig(args []string) Config {
+type ConnectionTrackingType string
+
+const (
+	ConnectionTrackingInMemory ConnectionTrackingType = "in-memory"
+	ConnectionTrackingDynamodb ConnectionTrackingType = "dynamodb"
+	ConnectionTrackingValkey   ConnectionTrackingType = "valkey"
+)
+
+type ConnectionTrackingConfig struct {
+	Type ConnectionTrackingType
+	URL  string
+}
+
+func (c ConnectionTrackingConfig) Validate() error {
+	switch c.Type {
+	case ConnectionTrackingInMemory:
+		if c.URL != "" {
+			return fmt.Errorf("in-memory must not have a URL")
+		}
+	case ConnectionTrackingDynamodb, ConnectionTrackingValkey:
+		if c.URL == "" {
+			return fmt.Errorf("%s requires a URL", c.Type)
+		}
+		u, err := url.Parse(c.URL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return fmt.Errorf("invalid connection tracking URL %q", c.URL)
+		}
+	default:
+		return fmt.Errorf("unknown tracking type %q", c.Type)
+	}
+	return nil
+}
+
+func parseConnectionTracking(typeValue, urlValue string) (ConnectionTrackingConfig, error) {
+	t := ConnectionTrackingType(strings.ToLower(strings.TrimSpace(typeValue)))
+	if t == "" {
+		t = ConnectionTrackingInMemory
+	}
+	cfg := ConnectionTrackingConfig{
+		Type: t,
+		URL:  strings.TrimSpace(urlValue),
+	}
+	if err := cfg.Validate(); err != nil {
+		return ConnectionTrackingConfig{}, err
+	}
+	return cfg, nil
+}
+
+func GetConfig(args []string) (Config, error) {
 	var k = koanf.New(".")
 
-	k.Load(env.Provider(".", env.Opt{
+	loadErr := k.Load(env.Provider(".", env.Opt{
 		Prefix: envNamePrefix,
 		TransformFunc: func(k, v string) (string, any) {
 			// Transform the key.
@@ -59,11 +107,22 @@ func GetConfig(args []string) Config {
 			return k, v
 		},
 	}), nil)
+	if loadErr != nil {
+		return Config{}, nil
+	}
 
 	var pwdcreds []security.PasswordCredentials
 	pwdcredsString := k.String("PASSWORD_CREDENTIALS")
 	if len(pwdcredsString) > 0 {
-		parseJson(pwdcredsString, &pwdcreds)
+		parseErr := parseJson(pwdcredsString, &pwdcreds)
+		if parseErr != nil {
+			return Config{}, parseErr
+		}
+	}
+
+	contrack, conntrackValidationErr := parseConnectionTracking(k.String("CONNECTION_TRACKING"), k.String("CONNECTION_TRACKING_URL"))
+	if conntrackValidationErr != nil {
+		return Config{}, conntrackValidationErr
 	}
 
 	return Config{
@@ -79,8 +138,7 @@ func GetConfig(args []string) Config {
 		DBUser:                k.String("DB_USER"),
 		DBPassword:            k.String("DB_PASSWORD"),
 		UsernameCookie:        k.String("USERNAME_COOKIE"),
-		DynamodbURL:           k.String("DYNAMODB_URL"),
-		ValkeyURL:             k.String("VALKEY_URL"),
+		ConnectionTracking:    contrack,
 		WsgwHost:              k.String("WSGW_HOST"),
 		WsgwPort:              k.Int("WSGW_PORT"),
 		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
@@ -88,14 +146,15 @@ func GetConfig(args []string) Config {
 		OtlpServiceName:       k.String("OTLP_SERVICE_NAME"),
 		OtlpServiceInstanceId: k.String("OTLP_SERVICE_INSTANCE_ID"),
 		OtlpTraceSampleAll:    k.Bool("OTLP_TRACE_SAMPLE_ALL"),
-	}
+	}, nil
 }
 
-func parseJson(value string, parsed any) {
+func parseJson(value string, parsed any) error {
 	unmarshalError := json.Unmarshal([]byte(value), parsed)
 	if unmarshalError != nil {
-		panic(fmt.Sprintf("failed to parse '%s': %#v\n", value, unmarshalError))
+		return fmt.Errorf("failed to parse '%s': %w", value, unmarshalError)
 	}
+	return nil
 }
 
 func GetWsgwUrl(conf Config) string {

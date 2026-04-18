@@ -22,10 +22,16 @@ spec:
           env:
             - name: LOG_LEVEL
               value: debug
-            - name: E2EAPP_DYNAMODB_URL
-              value: http://dynamodb-local:8000
-            - name: E2EAPP_VALKEY_URL
-              value: redis://valkey:6379
+            - name: E2EAPP_CONNECTION_TRACKING
+              valueFrom:
+                configMapKeyRef:
+                  name: wsgw-e2e-app-config
+                  key: CONNECTION_TRACKING
+            - name: E2EAPP_CONNECTION_TRACKING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: wsgw-e2e-app-config
+                  key: CONNECTION_TRACKING_URL
             - name: AWS_ACCESS_KEY_ID
               value: kalap
             - name: AWS_SECRET_ACCESS_KEY

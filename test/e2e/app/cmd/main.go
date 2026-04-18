@@ -34,7 +34,11 @@ func main() {
 	logger.Info().Msg("Test application instance starting...")
 	ctx = logger.WithContext(ctx)
 
-	conf := config.GetConfig(os.Args)
+	conf, configErr := config.GetConfig(os.Args)
+	if configErr != nil {
+		logger.Fatal().Err(configErr).Msg("configuration error")
+	}
+
 	logger.Info().Any("parsed config", conf).Send()
 
 	shutdownOtel := monitoring.InitOtel(ctx, monitoring.OtelConfig{

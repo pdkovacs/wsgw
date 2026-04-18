@@ -45,7 +45,8 @@ tasks:
     cmds:
       - |
         # DynamoDB local
-        DYNAMODB_URL=http://10.98.45.101:8000
+        export E2EAPP_CONNECTION_TRACKING=dynamodb
+        export E2EAPP_CONNECTION_TRACKING_URL=http://10.98.45.101:8000
         export AWS_ACCESS_KEY_ID=kalap
         export AWS_SECRET_ACCESS_KEY=kabat
 

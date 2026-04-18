@@ -77,7 +77,7 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 	logger := zerolog.Ctx(ctx).With().Logger()
 	userService := security.NewUserService()
 
-	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(ctx, conf.DynamodbURL, conf.ValkeyURL)
+	var wsConnections, conntrackerErr = conntrack.NewWsgwConnectionTracker(ctx, conf.ConnectionTracking)
 	if conntrackerErr != nil {
 		panic(fmt.Errorf("unable to create WSGW connection tracker %w", conntrackerErr))
 	}
