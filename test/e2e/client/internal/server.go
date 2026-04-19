@@ -85,7 +85,7 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		}
 		defer runInProgress.Store(false)
 
-		runContext, cancel := context.WithCancelCause(context.WithoutCancel(g.Request.Context()))
+		runContext, cancel := context.WithCancelCause(g.Request.Context())
 		defer cancel(fmt.Errorf("The request handler is returning to its caller"))
 
 		logger := zerolog.Ctx(runContext).With().Logger()
@@ -156,9 +156,13 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		g.JSON(http.StatusOK, map[string]string{"id": run.runId})
 
 		timedOut := false
+		clientGone := false
 		select {
 		case <-testRunDone:
 			logger.Debug().Bool("isContextAlive", runContext.Err() == nil).Msg("test-run done")
+		case <-runContext.Done():
+			logger.Debug().Err(context.Cause(runContext)).Msg("run context cancelled")
+			clientGone = true
 		case <-time.After(testRunTimeout):
 			logger.Debug().Msg("had enough waiting")
 			timedOut = true
@@ -167,6 +171,8 @@ func runTestHandler(conf config.Config) func(g *gin.Context) {
 		endReason := "test run handler finished before all deliveries were observed"
 		if timedOut {
 			endReason = fmt.Sprintf("test run timed out after %s", testRunTimeout)
+		} else if clientGone {
+			endReason = fmt.Sprintf("run context cancelled: %v", context.Cause(runContext))
 		}
 		forceEnded := run.forceEndOutstandingMessageSpans(endReason)
 		if forceEnded > 0 {
