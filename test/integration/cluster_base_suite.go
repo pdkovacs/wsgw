@@ -148,9 +148,9 @@ func (s *clusterBaseTestSuite) instanceUrl(i int) string {
 // pickPeer returns an instance index that is guaranteed to differ from `owner`.
 // The returned index is deterministic given the inputs to keep test failures reproducible.
 func (s *clusterBaseTestSuite) pickPeer(owner int, salt int) int {
-	// Move to the next instance, wrap around. With numClusterInstances >= 2 this
-	// always lands on a different instance.
-	return (owner + 1 + salt) % numClusterInstances
+	// Mod by (N-1) so the offset is in [1, N-1], then wrap around — this guarantees
+	// the result is in [0, N) \ {owner}.
+	return (owner + 1 + (salt % (numClusterInstances - 1))) % numClusterInstances
 }
 
 func (s *clusterBaseTestSuite) getCall(connId wsgw.ConnectionID, callIndex int) mock.Call {

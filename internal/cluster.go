@@ -107,6 +107,11 @@ func NewClusterSupport(conf config.Config, appUrls applicationURLs, localConns *
 		// not as a cache. Client-side caching adds CLIENT TRACKING traffic for no
 		// payoff and complicates testing against alternative servers (e.g. miniredis).
 		DisableCache: true,
+		// We talk to a single Valkey instance, not a Redis Cluster. Disabling cluster
+		// autodetection avoids a slot-routing failure in MULTI/EXEC (the owner key
+		// and the per-owner shard hash to different slots) and matches the current
+		// single-Valkey deployment in deploy/k8s/valkey-deployment.yaml.
+		ForceSingleClient: true,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("failed to create valkey client for %s: %v", conf.ValkeyURL, err))
