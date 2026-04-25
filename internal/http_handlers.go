@@ -80,6 +80,18 @@ func configureAppHTTPClient(http2Enabled bool) {
 	}
 }
 
+// stripWSUpgradeHeaders clones the client's headers and removes the HTTP/1.1
+// hop-by-hop WS upgrade headers, so the resulting set is safe to relay to the
+// backend over HTTP/2 (which forbids them per RFC 7540 §8.1.2.2). The actual
+// WS upgrade happens between the client and wsgw, not on the wsgw→backend leg.
+func stripWSUpgradeHeaders(h http.Header) http.Header {
+	cleaned := h.Clone()
+	for _, name := range []string{"Upgrade", "Connection", "Sec-Websocket-Key", "Sec-Websocket-Version", "Sec-Websocket-Extensions", "Sec-Websocket-Protocol"} {
+		cleaned.Del(name)
+	}
+	return cleaned
+}
+
 type appConnection struct {
 	id         ConnectionID
 	httpClient http.Client
@@ -98,13 +110,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return nil, errAppConnInternal
 	}
-	request.Header = r.Header.Clone()
-	// Strip HTTP/1.1 hop-by-hop headers from the WS upgrade so this auth/validation
-	// relay is valid over HTTP/2 (forbidden by RFC 7540 §8.1.2.2). The actual WS
-	// upgrade happens between the client and wsgw, not on this leg.
-	for _, h := range []string{"Upgrade", "Connection", "Sec-Websocket-Key", "Sec-Websocket-Version", "Sec-Websocket-Extensions", "Sec-Websocket-Protocol"} {
-		request.Header.Del(h)
-	}
+	request.Header = stripWSUpgradeHeaders(r.Header)
 
 	connId := createConnectionId(r.Context())
 
@@ -258,7 +264,7 @@ func connectHandler(
 
 			wsConn.Close(websocket.StatusNormalClosure, "")
 
-			handleClientDisconnected(clientDisconnectCtx, appUrls, g.Request.Header, appConn, logger)
+			handleClientDisconnected(clientDisconnectCtx, appUrls, stripWSUpgradeHeaders(g.Request.Header), appConn, logger)
 
 			if clusterSupport != nil {
 				clusterSupport.deregisterConnection(requestContext, appConn.id)
