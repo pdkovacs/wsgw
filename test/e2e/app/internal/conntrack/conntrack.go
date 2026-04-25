@@ -23,6 +23,11 @@ func NewWsgwConnectionTracker(ctx context.Context, connectionTracking config.Con
 			return nil, fmt.Errorf("E2EAPP_CONNECTION_TRACKING_URL should be set when E2EAPP_CONNECTION_TRACKING=valkey")
 		}
 		return NewValkeyConntracker(ctx, connectionTracking.URL)
+	case config.ConnectionTrackingPostgres:
+		if len(connectionTracking.URL) == 0 {
+			return nil, fmt.Errorf("E2EAPP_CONNECTION_TRACKING_URL should be set when E2EAPP_CONNECTION_TRACKING=postgres")
+		}
+		return NewPostgresConntracker(ctx, connectionTracking.URL)
 	default:
 		return nil, fmt.Errorf("unsupported connection tracking type '%s'", connectionTracking.Type)
 	}

@@ -21,3 +21,11 @@ tasks:
       - task: single
       - kubectl -n {{.NAMESPACE}} apply -f valkey-deployment.yaml
       - kubectl -n {{.NAMESPACE}} apply -f valkey-service.yaml
+  postgres:
+    cmds:
+      - kubectl -n {{.NAMESPACE}} apply -f postgres-deployment.yaml
+      - kubectl -n {{.NAMESPACE}} apply -f postgres-service.yaml
+  clustered-postgres:
+    cmds:
+      - task: single
+      - task: postgres

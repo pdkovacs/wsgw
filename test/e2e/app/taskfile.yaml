@@ -9,6 +9,27 @@ vars:
   HTTP2: '{{.HTTP2 | default "false"}}'
 
 tasks:
+  postgres-local:
+    desc: Run a local postgres container that matches the k8s manifest (PGPASSWORD from ~/.postgres.secrets or env)
+    cmds:
+      - |
+        if [ -f "$HOME/.postgres.secrets" ]; then
+          . "$HOME/.postgres.secrets"
+        fi
+        if [ -z "$PGPASSWORD" ]; then
+          echo "PGPASSWORD must be set (in ~/.postgres.secrets or in the environment)" >&2
+          exit 1
+        fi
+        if [ "$(docker ps -aq -f name=^wsgw-postgres$)" ]; then
+          docker start wsgw-postgres
+        else
+          docker run -d --name wsgw-postgres \
+            -e POSTGRES_USER=wsgw \
+            -e POSTGRES_PASSWORD="$PGPASSWORD" \
+            -e POSTGRES_DB=wsgw-e2e-app \
+            -p 5432:5432 \
+            postgres:17-alpine
+        fi
   version-data:
     cmds:
       - echo "APPLICATION=WebSocket Gateway / End-to-end Test / Application" > internal/config/version_data.txt

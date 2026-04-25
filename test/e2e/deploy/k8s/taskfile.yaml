@@ -48,6 +48,26 @@ tasks:
         then
           kubectl -n {{.NAMESPACE}} create secret generic wsgw-e2e-app-users "--from-literal=PASSWORD_CREDENTIALS=$pwcreds"
         fi
+  postgres-secret:
+    cmds:
+      - |
+        if [ -f "$HOME/.postgres.secrets" ]; then
+          . "$HOME/.postgres.secrets"
+        fi
+        if [ -z "$PGPASSWORD" ]; then
+          echo "PGPASSWORD must be set (in ~/.postgres.secrets or in the environment)" >&2
+          exit 1
+        fi
+        if ! kubectl -n {{.NAMESPACE}} get secret wsgw-e2e-app-postgres > /dev/null 2>&1; then
+          kubectl -n {{.NAMESPACE}} create secret generic wsgw-e2e-app-postgres \
+            "--from-literal=PGPASSWORD=$PGPASSWORD"
+        fi
+  postgres:
+    cmds:
+      - task: postgres-secret
+      - kubectl -n {{.NAMESPACE}} apply -f ../../../../deploy/k8s/postgres-deployment.yaml
+      - kubectl -n {{.NAMESPACE}} apply -f ../../../../deploy/k8s/postgres-service.yaml
+      - kubectl -n {{.NAMESPACE}} wait --for=condition=available --timeout=120s deployment/postgres
   app:
     cmds:
       - task: userdb

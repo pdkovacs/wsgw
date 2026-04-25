@@ -32,6 +32,12 @@ spec:
                 configMapKeyRef:
                   name: wsgw-e2e-app-config
                   key: CONNECTION_TRACKING_URL
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wsgw-e2e-app-postgres
+                  key: PGPASSWORD
+                  optional: true
             - name: AWS_ACCESS_KEY_ID
               value: kalap
             - name: AWS_SECRET_ACCESS_KEY

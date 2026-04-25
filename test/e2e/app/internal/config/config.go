@@ -47,6 +47,7 @@ const (
 	ConnectionTrackingInMemory ConnectionTrackingType = "in-memory"
 	ConnectionTrackingDynamodb ConnectionTrackingType = "dynamodb"
 	ConnectionTrackingValkey   ConnectionTrackingType = "valkey"
+	ConnectionTrackingPostgres ConnectionTrackingType = "postgres"
 )
 
 type ConnectionTrackingConfig struct {
@@ -60,7 +61,7 @@ func (c ConnectionTrackingConfig) Validate() error {
 		if c.URL != "" {
 			return fmt.Errorf("in-memory must not have a URL")
 		}
-	case ConnectionTrackingDynamodb, ConnectionTrackingValkey:
+	case ConnectionTrackingDynamodb, ConnectionTrackingValkey, ConnectionTrackingPostgres:
 		if c.URL == "" {
 			return fmt.Errorf("%s requires a URL", c.Type)
 		}
