@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/valkey-io/valkey-go"
+	"github.com/valkey-io/valkey-go/valkeyotel"
 )
 
 const connTrackKeyPrefix = "wsgw:conntrack:"
@@ -67,7 +68,7 @@ func NewValkeyConntracker(ctx context.Context, valkeyURL string) (*ValkeyConntra
 
 	addr := parsedURL.Host
 
-	client, err := valkey.NewClient(valkey.ClientOption{
+	client, err := valkeyotel.NewClient(valkey.ClientOption{
 		InitAddress: []string{addr},
 	})
 	if err != nil {
