@@ -27,6 +27,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # WSGW_INSTANCE_ADDR is what cluster peers use to reach this pod over HTTP.
+            # Composed from podIP + the listening port; supersedes WSGW_INSTANCE_IPADDRESS,
+            # which is kept above for back-compat.
+            - name: WSGW_INSTANCE_ADDR
+              value: "$(WSGW_INSTANCE_IPADDRESS):8080"
             - name: WSGW_SERVER_PORT
               value: "8080"
             - name: WSGW_HTTP2

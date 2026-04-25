@@ -31,6 +31,9 @@ type MockApp interface {
 	GetAppAddress() string
 	Stop(ctx context.Context)
 	SendToClient(ctx context.Context, connId wsgw.ConnectionID, message MessageJSON) error
+	// SendToClientVia POSTs the message to a specific wsgw base URL. Used by cluster
+	// tests to deliberately target a non-owner instance and exercise the relay path.
+	SendToClientVia(ctx context.Context, baseUrl string, connId wsgw.ConnectionID, message MessageJSON) error
 	On(methodName string, connId wsgw.ConnectionID, arguments ...any)
 	ExpectConnDisconn(connId wsgw.ConnectionID)
 	GetCalls(connId wsgw.ConnectionID) []mock.Call
@@ -226,7 +229,11 @@ func (m *mockApplication) GetCalls(connId wsgw.ConnectionID) []mock.Call {
 }
 
 func (s *mockApplication) SendToClient(ctx context.Context, connId wsgw.ConnectionID, message MessageJSON) error {
-	url := fmt.Sprintf("%s%s/%s", s.getwsgwUrl(), wsgw.MessagePath, connId)
+	return s.SendToClientVia(ctx, s.getwsgwUrl(), connId, message)
+}
+
+func (s *mockApplication) SendToClientVia(ctx context.Context, baseUrl string, connId wsgw.ConnectionID, message MessageJSON) error {
+	url := fmt.Sprintf("%s%s/%s", baseUrl, wsgw.MessagePath, connId)
 	req, createReqErr := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(message["message"]))
 	if createReqErr != nil {
 		return createReqErr

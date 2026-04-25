@@ -20,21 +20,25 @@ import (
 
 // Valkey key layout
 //
-//   wsgw:owner:{connId}        STRING ownerIP             — fast lookup on relay path
-//   wsgw:connections:{ownerIP} HASH   connId -> ""        — per-owner shard, used by the sweeper
-//   wsgw:heartbeat:{ownerIP}   STRING ts (TTL)            — owner liveness
-//   wsgw:sweeper:lock          STRING holderIP (TTL)      — at-most-one sweeper at a time
+//   wsgw:owner:{connId}          STRING ownerAddr          — fast lookup on relay path
+//   wsgw:connections:{ownerAddr} HASH   connId -> ""       — per-owner shard, used by the sweeper
+//   wsgw:heartbeat:{ownerAddr}   STRING ts (TTL)           — owner liveness
+//   wsgw:sweeper:lock            STRING holderAddr (TTL)   — at-most-one sweeper at a time
 //
 // The owner-string and the per-owner shard are written together via MULTI/EXEC on
 // register/deregister. The shard exists so that the sweeper can answer "what does this
 // dead owner own?" without scanning every connection record.
+//
+// ownerAddr is "host:port" — the address peers use to reach the owner over HTTP. We
+// key on the full address (rather than just IP) so multiple instances can coexist on
+// one host (the integration tests do this).
 
 const (
-	keyPrefix    = "wsgw:"
-	keyOwner     = keyPrefix + "owner:"
-	keyConnsByIP = keyPrefix + "connections:"
-	keyHeartbeat = keyPrefix + "heartbeat:"
-	keySweepLock = keyPrefix + "sweeper:lock"
+	keyPrefix       = "wsgw:"
+	keyOwner        = keyPrefix + "owner:"
+	keyConnsByOwner = keyPrefix + "connections:"
+	keyHeartbeat    = keyPrefix + "heartbeat:"
+	keySweepLock    = keyPrefix + "sweeper:lock"
 )
 
 // Tunables. Heartbeat TTL is 3× the heartbeat interval so a single missed write doesn't
@@ -56,11 +60,10 @@ var errRelayFailed = errors.New("failed to relay to connection owner")
 // behaviour. Otherwise, Start launches the heartbeat and sweeper goroutines; Stop tears
 // them down and clears this instance's heartbeat key.
 type ClusterSupport struct {
-	client       valkey.Client
-	myIP         string
-	instancePort int
-	httpScheme   string
-	appUrls      applicationURLs
+	client     valkey.Client
+	myAddr     string
+	httpScheme string
+	appUrls    applicationURLs
 
 	// Local connection registry — set by the server so the sweeper / self-relay can
 	// inspect what this instance owns. Optional; nil-safe.
@@ -78,11 +81,15 @@ func NewClusterSupport(conf config.Config, appUrls applicationURLs, localConns *
 		return nil
 	}
 
-	myIP := os.Getenv("WSGW_INSTANCE_IPADDRESS")
-	if len(myIP) == 0 {
-		// We can't operate in cluster mode without a routable address for ourselves.
-		// Treat as misconfiguration and fail loudly at startup.
-		panic("WSGW_INSTANCE_IPADDRESS must be set when cluster mode is enabled")
+	myAddr := conf.InstanceAddr
+	if len(myAddr) == 0 {
+		ip := os.Getenv("WSGW_INSTANCE_IPADDRESS")
+		if len(ip) == 0 {
+			// We can't operate in cluster mode without a routable address for ourselves.
+			// Treat as misconfiguration and fail loudly at startup.
+			panic("WSGW_INSTANCE_ADDR (or WSGW_INSTANCE_IPADDRESS + WSGW_SERVER_PORT) must be set when cluster mode is enabled")
+		}
+		myAddr = fmt.Sprintf("%s:%d", ip, conf.ServerPort)
 	}
 
 	scheme := os.Getenv("WSGW_INSTANCE_PROTOCOL")
@@ -96,19 +103,22 @@ func NewClusterSupport(conf config.Config, appUrls applicationURLs, localConns *
 	}
 	client, err := valkeyotel.NewClient(valkey.ClientOption{
 		InitAddress: []string{parsedURL.Host},
+		// We use Valkey for cluster coordination state (owner mappings, heartbeats),
+		// not as a cache. Client-side caching adds CLIENT TRACKING traffic for no
+		// payoff and complicates testing against alternative servers (e.g. miniredis).
+		DisableCache: true,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("failed to create valkey client for %s: %v", conf.ValkeyURL, err))
 	}
 
 	return &ClusterSupport{
-		client:       client,
-		myIP:         myIP,
-		instancePort: conf.ServerPort,
-		httpScheme:   scheme,
-		appUrls:      appUrls,
-		localConns:   localConns,
-		stopCh:       make(chan struct{}),
+		client:     client,
+		myAddr:     myAddr,
+		httpScheme: scheme,
+		appUrls:    appUrls,
+		localConns: localConns,
+		stopCh:     make(chan struct{}),
 	}
 }
 
@@ -116,7 +126,7 @@ func NewClusterSupport(conf config.Config, appUrls applicationURLs, localConns *
 // synchronously so that any connections registered immediately afterwards are not seen as
 // orphans by a fast-moving sweeper on a peer.
 func (c *ClusterSupport) Start(ctx context.Context) error {
-	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str("myIP", c.myIP).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str("myAddr", c.myAddr).Logger()
 
 	if err := c.writeHeartbeat(ctx); err != nil {
 		logger.Error().Err(err).Msg("initial heartbeat failed")
@@ -140,7 +150,7 @@ func (c *ClusterSupport) Stop(ctx context.Context) {
 	// TTL will clear the key on its own.
 	delCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	c.client.Do(delCtx, c.client.B().Del().Key(keyHeartbeat+c.myIP).Build())
+	c.client.Do(delCtx, c.client.B().Del().Key(keyHeartbeat+c.myAddr).Build())
 
 	c.client.Close()
 }
@@ -150,8 +160,8 @@ func (c *ClusterSupport) registerConnection(ctx context.Context, connId Connecti
 
 	cmds := valkey.Commands{
 		c.client.B().Multi().Build(),
-		c.client.B().Set().Key(keyOwner + string(connId)).Value(c.myIP).Build(),
-		c.client.B().Hset().Key(keyConnsByIP + c.myIP).FieldValue().FieldValue(string(connId), "").Build(),
+		c.client.B().Set().Key(keyOwner + string(connId)).Value(c.myAddr).Build(),
+		c.client.B().Hset().Key(keyConnsByOwner + c.myAddr).FieldValue().FieldValue(string(connId), "").Build(),
 		c.client.B().Exec().Build(),
 	}
 	for _, resp := range c.client.DoMulti(ctx, cmds...) {
@@ -169,7 +179,7 @@ func (c *ClusterSupport) deregisterConnection(ctx context.Context, connId Connec
 	cmds := valkey.Commands{
 		c.client.B().Multi().Build(),
 		c.client.B().Del().Key(keyOwner + string(connId)).Build(),
-		c.client.B().Hdel().Key(keyConnsByIP + c.myIP).Field(string(connId)).Build(),
+		c.client.B().Hdel().Key(keyConnsByOwner + c.myAddr).Field(string(connId)).Build(),
 		c.client.B().Exec().Build(),
 	}
 	for _, resp := range c.client.DoMulti(ctx, cmds...) {
@@ -195,7 +205,7 @@ func (c *ClusterSupport) deregisterConnection(ctx context.Context, connId Connec
 func (c *ClusterSupport) relayMessage(ctx context.Context, connId ConnectionID, message string) error {
 	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster").Str(ConnectionIDKey, string(connId)).Logger()
 
-	ownerIP, err := c.client.Do(ctx, c.client.B().Get().Key(keyOwner+string(connId)).Build()).ToString()
+	ownerAddr, err := c.client.Do(ctx, c.client.B().Get().Key(keyOwner+string(connId)).Build()).ToString()
 	if valkey.IsValkeyNil(err) {
 		return errOwnerNotFound
 	}
@@ -204,13 +214,13 @@ func (c *ClusterSupport) relayMessage(ctx context.Context, connId ConnectionID, 
 		return fmt.Errorf("owner lookup: %w", err)
 	}
 
-	if ownerIP == c.myIP {
+	if ownerAddr == c.myAddr {
 		logger.Warn().Msg("stale self-owned entry — cleaning up")
 		_ = c.deregisterConnection(ctx, connId)
 		return errOwnerNotFound
 	}
 
-	url := fmt.Sprintf("%s://%s:%d/message/%s", c.httpScheme, ownerIP, c.instancePort, string(connId))
+	url := fmt.Sprintf("%s://%s/message/%s", c.httpScheme, ownerAddr, string(connId))
 
 	relayCtx, cancel := context.WithTimeout(ctx, relayTimeout)
 	defer cancel()
@@ -223,7 +233,7 @@ func (c *ClusterSupport) relayMessage(ctx context.Context, connId ConnectionID, 
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		logger.Error().Err(err).Str("ownerIP", ownerIP).Msg("relay HTTP call failed")
+		logger.Error().Err(err).Str("ownerAddr", ownerAddr).Msg("relay HTTP call failed")
 		return errRelayFailed
 	}
 	defer cleanupResponse(resp)
@@ -234,7 +244,7 @@ func (c *ClusterSupport) relayMessage(ctx context.Context, connId ConnectionID, 
 		return errOwnerNotFound
 	}
 	if resp.StatusCode != http.StatusNoContent {
-		logger.Error().Int("status", resp.StatusCode).Str("ownerIP", ownerIP).Msg("unexpected relay status")
+		logger.Error().Int("status", resp.StatusCode).Str("ownerAddr", ownerAddr).Msg("unexpected relay status")
 		return errRelayFailed
 	}
 	return nil
@@ -263,7 +273,7 @@ func (c *ClusterSupport) heartbeatLoop(ctx context.Context) {
 
 func (c *ClusterSupport) writeHeartbeat(ctx context.Context) error {
 	cmd := c.client.B().Set().
-		Key(keyHeartbeat + c.myIP).
+		Key(keyHeartbeat + c.myAddr).
 		Value(strconv.FormatInt(time.Now().Unix(), 10)).
 		ExSeconds(int64(heartbeatTTL.Seconds())).
 		Build()
@@ -295,7 +305,7 @@ func (c *ClusterSupport) sweepOnce(ctx context.Context) {
 	// auto-releases the lock when the TTL expires.
 	acquireCmd := c.client.B().Set().
 		Key(keySweepLock).
-		Value(c.myIP).
+		Value(c.myAddr).
 		Nx().
 		ExSeconds(int64(sweepLockTTL.Seconds())).
 		Build()
@@ -312,19 +322,19 @@ func (c *ClusterSupport) sweepOnce(ctx context.Context) {
 
 	var cursor uint64
 	for {
-		scanCmd := c.client.B().Scan().Cursor(cursor).Match(keyConnsByIP + "*").Count(100).Build()
+		scanCmd := c.client.B().Scan().Cursor(cursor).Match(keyConnsByOwner + "*").Count(100).Build()
 		entry, scanErr := c.client.Do(ctx, scanCmd).AsScanEntry()
 		if scanErr != nil {
 			logger.Error().Err(scanErr).Msg("sweep scan failed")
 			return
 		}
 		for _, key := range entry.Elements {
-			ownerIP := key[len(keyConnsByIP):]
-			if ownerIP == c.myIP {
+			ownerAddr := key[len(keyConnsByOwner):]
+			if ownerAddr == c.myAddr {
 				continue
 			}
-			if err := c.reapIfDead(ctx, ownerIP); err != nil {
-				logger.Warn().Err(err).Str("ownerIP", ownerIP).Msg("reap failed")
+			if err := c.reapIfDead(ctx, ownerAddr); err != nil {
+				logger.Warn().Err(err).Str("ownerAddr", ownerAddr).Msg("reap failed")
 			}
 		}
 		cursor = entry.Cursor
@@ -339,12 +349,12 @@ func (c *ClusterSupport) sweepOnce(ctx context.Context) {
 // is done in a Lua script to keep it atomic.
 func (c *ClusterSupport) releaseSweepLock(ctx context.Context) {
 	const script = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`
-	cmd := c.client.B().Eval().Script(script).Numkeys(1).Key(keySweepLock).Arg(c.myIP).Build()
+	cmd := c.client.B().Eval().Script(script).Numkeys(1).Key(keySweepLock).Arg(c.myAddr).Build()
 	_ = c.client.Do(ctx, cmd).Error()
 }
 
-func (c *ClusterSupport) reapIfDead(ctx context.Context, ownerIP string) error {
-	exists, err := c.client.Do(ctx, c.client.B().Exists().Key(keyHeartbeat+ownerIP).Build()).AsInt64()
+func (c *ClusterSupport) reapIfDead(ctx context.Context, ownerAddr string) error {
+	exists, err := c.client.Do(ctx, c.client.B().Exists().Key(keyHeartbeat+ownerAddr).Build()).AsInt64()
 	if err != nil {
 		return fmt.Errorf("heartbeat exists: %w", err)
 	}
@@ -352,10 +362,10 @@ func (c *ClusterSupport) reapIfDead(ctx context.Context, ownerIP string) error {
 		return nil
 	}
 
-	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster.sweeper").Str("ownerIP", ownerIP).Logger()
+	logger := zerolog.Ctx(ctx).With().Str("unit", "cluster.sweeper").Str("ownerAddr", ownerAddr).Logger()
 	logger.Info().Msg("owner declared dead — reaping connections")
 
-	connIds, err := c.client.Do(ctx, c.client.B().Hkeys().Key(keyConnsByIP+ownerIP).Build()).AsStrSlice()
+	connIds, err := c.client.Do(ctx, c.client.B().Hkeys().Key(keyConnsByOwner+ownerAddr).Build()).AsStrSlice()
 	if err != nil {
 		return fmt.Errorf("hkeys: %w", err)
 	}
@@ -366,7 +376,7 @@ func (c *ClusterSupport) reapIfDead(ctx context.Context, ownerIP string) error {
 			logger.Warn().Err(err).Str(ConnectionIDKey, idStr).Msg("failed to delete owner key")
 		}
 	}
-	if err := c.client.Do(ctx, c.client.B().Del().Key(keyConnsByIP+ownerIP).Build()).Error(); err != nil {
+	if err := c.client.Do(ctx, c.client.B().Del().Key(keyConnsByOwner+ownerAddr).Build()).Error(); err != nil {
 		logger.Warn().Err(err).Msg("failed to delete connections shard")
 	}
 	return nil

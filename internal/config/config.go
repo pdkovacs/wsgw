@@ -11,12 +11,16 @@ import (
 )
 
 type Config struct {
-	ServerHost            string
-	ServerPort            int
-	Http2                 bool
-	AppBaseUrl            string
-	AckNewConnWithConnId  bool
-	LoadBalancerAddress   string // TODO: remove this
+	ServerHost           string
+	ServerPort           int
+	Http2                bool
+	AppBaseUrl           string
+	AckNewConnWithConnId bool
+	LoadBalancerAddress  string // TODO: remove this
+	// InstanceAddr is the host:port other cluster members use to reach this instance
+	// over HTTP for message relay. Mainly a test seam — in production, NewClusterSupport
+	// composes it from WSGW_INSTANCE_IPADDRESS + WSGW_SERVER_PORT when this is empty.
+	InstanceAddr          string
 	ValkeyURL             string
 	OtlpEndpoint          string
 	OtlpServiceNamespace  string
@@ -51,6 +55,7 @@ func GetConfig(args []string) Config {
 		AppBaseUrl:            k.String("APP_BASE_URL"),
 		AckNewConnWithConnId:  k.Bool("ACK_NEW_CONN_WITH_CONN_ID"),
 		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),
+		InstanceAddr:          k.String("INSTANCE_ADDR"),
 		ValkeyURL:             k.String("VALKEY_URL"),
 		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
 		OtlpServiceNamespace:  k.String("OTLP_SERVICE_NAMESPACE"),
