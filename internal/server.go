@@ -39,13 +39,18 @@ func NewServer(
 ) *Server {
 	return &Server{
 		createConnectionId: createConnectionId,
-		clusterSupport:     NewClusterSupport(configuration),
 	}
 }
 
 // SetupAndStart sets up and starts server.
 func (s *Server) SetupAndStart(serverCtx context.Context, configuration config.Config, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
-	r := createWsgwRequestHandler(configuration, s.createConnectionId, s.clusterSupport)
+	r, cluster := createWsgwRequestHandler(configuration, s.createConnectionId)
+	s.clusterSupport = cluster
+	if cluster != nil {
+		if err := cluster.Start(serverCtx); err != nil {
+			return fmt.Errorf("cluster start: %w", err)
+		}
+	}
 	return s.start(serverCtx, configuration, r, ready)
 }
 
@@ -111,10 +116,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	} else {
 		logger.Info().Msg("Server shutdown successfully")
 	}
+	if s.clusterSupport != nil {
+		s.clusterSupport.Stop(ctx)
+	}
 	return shutdownErr
 }
 
-func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID, clusterSupport *ClusterSupport) *gin.Engine {
+func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID) (*gin.Engine, *ClusterSupport) {
 	configureAppHTTPClient(configuration.Http2)
 
 	rootEngine := gin.Default()
@@ -129,14 +137,16 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 
 	wsConns := newWsConnections()
 
-	appUrls := appURLs{
+	appUrls := &appURLs{
 		baseUrl: configuration.AppBaseUrl,
 	}
+
+	clusterSupport := NewClusterSupport(configuration, appUrls, wsConns)
 
 	rootEngine.GET(
 		string(ConnectPath),
 		connectHandler(
-			&appUrls,
+			appUrls,
 			wsConns,
 			configuration.LoadBalancerAddress,
 			createConnectionId,
@@ -153,7 +163,7 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 		),
 	)
 
-	return rootEngine
+	return rootEngine, clusterSupport
 }
 
 type appURLs struct {

@@ -17,8 +17,7 @@ type Config struct {
 	AppBaseUrl            string
 	AckNewConnWithConnId  bool
 	LoadBalancerAddress   string // TODO: remove this
-	RedisHost             string
-	RedisPort             int
+	ValkeyURL             string
 	OtlpEndpoint          string
 	OtlpServiceNamespace  string
 	OtlpServiceName       string
@@ -52,6 +51,7 @@ func GetConfig(args []string) Config {
 		AppBaseUrl:            k.String("APP_BASE_URL"),
 		AckNewConnWithConnId:  k.Bool("ACK_NEW_CONN_WITH_CONN_ID"),
 		LoadBalancerAddress:   k.String("LOAD_BALANCER_ADDRESS"),
+		ValkeyURL:             k.String("VALKEY_URL"),
 		OtlpEndpoint:          k.String("OTLP_ENDPOINT"),
 		OtlpServiceNamespace:  k.String("OTLP_SERVICE_NAMESPACE"),
 		OtlpServiceName:       k.String("OTLP_SERVICE_NAME"),

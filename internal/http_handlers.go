@@ -357,6 +357,19 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...", connectionIdStr)
 			errPush = clusterSupport.relayMessage(requestContext, ConnectionID(connectionIdStr), bodyAsString)
 		}
+		if errors.Is(errPush, errOwnerNotFound) {
+			logger.Info().Msg("ws connection not found in cluster")
+			g.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		if errors.Is(errPush, errRelayFailed) {
+			// Owner is registered but unreachable. We do NOT delete the Redis entry —
+			// the sweeper is the sole authority on declaring an owner dead. The backend
+			// can retry; once the owner's heartbeat expires, retries will resolve to 404.
+			logger.Warn().Err(errPush).Msg("relay failed — owner unreachable, transient")
+			g.AbortWithStatus(http.StatusBadGateway)
+			return
+		}
 		if errPush != nil {
 			logger.Error().Err(errPush).Str("connectionIdStr", connectionIdStr).Msgf("failed to push to connection")
 			g.AbortWithStatus(http.StatusInternalServerError)

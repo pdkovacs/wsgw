@@ -1,6 +1,6 @@
 # Web-socket gateway
 
-Service taking care of the management (and use) of stateful web-socket connections on behalf of clustered applications with with stateless back-ends.
+Service taking care of the management (and use) of stateful web-socket connections on behalf of clustered applications with stateless back-ends.
 
 ## Endpoints provided by the gateway
 
