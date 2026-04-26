@@ -129,9 +129,9 @@ func (s *sendMessageTestSuite) testSendReceiveMessagesFromApp(ctx context.Contex
 		start := time.Now()
 
 		for msg := range msgsToReceive {
-			err = s.mockApp.SendToClient(ctx, connId, toWsMessage(msg))
+			sendErr := s.mockApp.SendToClient(ctx, connId, toWsMessage(msg))
 			wg.Done()
-			s.NoError(err)
+			s.NoError(sendErr)
 		}
 
 		logger.Debug().Dur("timeTaken", time.Since(start)).Msg("sending to client")
@@ -143,9 +143,9 @@ func (s *sendMessageTestSuite) testSendReceiveMessagesFromApp(ctx context.Contex
 		for msg := range msgsToSend {
 			jsonMsg := toWsMessage(msg)
 			s.mockApp.On(mockapp.MockMethodMessageReceived, connId, jsonMsg)
-			err = client.writeMessage(ctx, jsonMsg)
+			writeErr := client.writeMessage(ctx, jsonMsg)
 			wg.Done()
-			s.NoError(err)
+			s.NoError(writeErr)
 		}
 
 		logger.Debug().Dur("timeTaken", time.Since(start)).Msg("sending to app")

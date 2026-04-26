@@ -48,7 +48,9 @@ type MyMock struct {
 }
 
 func newClientPeer() *MyMock {
-	return &MyMock{disconnectNotification: make(chan struct{})}
+	// cap-1: lets the disconnect handler post its notification without blocking
+	// even if the test hasn't yet started reading from OnDisconnect's channel.
+	return &MyMock{disconnectNotification: make(chan struct{}, 1)}
 }
 
 func (m *MyMock) connect() {
@@ -140,16 +142,16 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			m.connMocksMux.Lock()
-			defer m.connMocksMux.Unlock()
-
-			_, ok := m.connMocks[connId]
+			mockConn, ok := m.connMocks[connId]
 			if !ok {
 				logger.Info().Str(wsgw.ConnectionIDKey, connId).Msg("No mock for connection yet, creating...")
-				m.connMocks[string(connId)] = newClientPeer()
+				m.connMocks[connId] = newClientPeer()
+				m.connMocksMux.Unlock()
 				res.Status(http.StatusOK)
 				return
 			}
-			m.connMocks[connId].connect()
+			m.connMocksMux.Unlock()
+			mockConn.connect()
 		}
 
 		res.Status(http.StatusOK)
@@ -163,13 +165,14 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
 		if connId := req.Header.Get(connHeaderKey); connId != "" {
 			m.connMocksMux.Lock()
-			defer m.connMocksMux.Unlock()
-			if _, ok := m.connMocks[connId]; !ok {
+			mockConn, ok := m.connMocks[connId]
+			m.connMocksMux.Unlock()
+			if !ok {
 				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
 				res.Status(http.StatusInternalServerError)
 				return
 			}
-			m.connMocks[connId].disconnected()
+			mockConn.disconnected()
 		}
 	})
 
@@ -188,13 +191,14 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 			}
 
 			m.connMocksMux.Lock()
-			defer m.connMocksMux.Unlock()
-			if _, ok := m.connMocks[connId]; !ok {
+			mockConn, ok := m.connMocks[connId]
+			m.connMocksMux.Unlock()
+			if !ok {
 				logger.Error().Str(wsgw.ConnectionIDKey, connId).Msg("connection not mocked")
 				res.Status(http.StatusInternalServerError)
 				return
 			}
-			m.connMocks[connId].messageReceived(parseMessageJSON(bodyAsBytes))
+			mockConn.messageReceived(parseMessageJSON(bodyAsBytes))
 		}
 	})
 
@@ -202,7 +206,10 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 }
 
 func (m *mockApplication) OnDisconnect(connId wsgw.ConnectionID) chan struct{} {
-	return m.connMocks[string(connId)].disconnectNotification
+	m.connMocksMux.Lock()
+	mockConn := m.connMocks[string(connId)]
+	m.connMocksMux.Unlock()
+	return mockConn.disconnectNotification
 }
 
 func (m *mockApplication) On(methodName string, connId wsgw.ConnectionID, arguments ...any) {
