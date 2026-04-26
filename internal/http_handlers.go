@@ -223,7 +223,6 @@ func connectHandler(
 	loadBalancerAddress string,
 	createConnectionId func(ctx context.Context) ConnectionID,
 	ackWithNewConnId bool,
-	clusterSupport *ClusterSupport,
 ) gin.HandlerFunc {
 	return func(g *gin.Context) {
 		requestContext := g.Request.Context()
@@ -266,10 +265,6 @@ func connectHandler(
 
 			handleClientDisconnected(clientDisconnectCtx, appUrls, stripWSUpgradeHeaders(g.Request.Header), appConn, logger)
 
-			if clusterSupport != nil {
-				clusterSupport.deregisterConnection(requestContext, appConn.id)
-			}
-
 			if wsClosedError != nil {
 				if errors.Is(wsClosedError, context.Canceled) {
 					return // Done
@@ -283,10 +278,6 @@ func connectHandler(
 				logger.Error().Err(wsClosedError).Send()
 			}
 		}()
-
-		if clusterSupport != nil {
-			clusterSupport.registerConnection(requestContext, appConn.id)
-		}
 
 		if ackWithNewConnId {
 			ackErr := sendMessageToClient(requestContext, wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
@@ -305,7 +296,7 @@ func connectHandler(
 	}
 }
 
-func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerFunc {
+func pushHandler(ws *wsConnections) gin.HandlerFunc {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		logger.Debug().Msg("BEGIN")
@@ -349,25 +340,8 @@ func pushHandler(ws *wsConnections, clusterSupport *ClusterSupport) gin.HandlerF
 			return
 		}
 		if errPush == errConnectionNotFound {
-			if clusterSupport == nil {
-				logger.Info().Msg("ws connection not found")
-				g.AbortWithStatus(http.StatusNotFound)
-				return
-			}
-			logger.Info().Str("connectionIdStr", connectionIdStr).Msgf("ws connection '%s' isn't managed here, publishing payload...", connectionIdStr)
-			errPush = clusterSupport.relayMessage(requestContext, ConnectionID(connectionIdStr), bodyAsString)
-		}
-		if errors.Is(errPush, errOwnerNotFound) {
-			logger.Info().Msg("ws connection not found in cluster")
+			logger.Info().Msg("ws connection not found")
 			g.AbortWithStatus(http.StatusNotFound)
-			return
-		}
-		if errors.Is(errPush, errRelayFailed) {
-			// Owner is registered but unreachable. We do NOT delete the Redis entry —
-			// the sweeper is the sole authority on declaring an owner dead. The backend
-			// can retry; once the owner's heartbeat expires, retries will resolve to 404.
-			logger.Warn().Err(errPush).Msg("relay failed — owner unreachable, transient")
-			g.AbortWithStatus(http.StatusBadGateway)
 			return
 		}
 		if errPush != nil {

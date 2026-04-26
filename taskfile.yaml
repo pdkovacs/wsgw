@@ -30,8 +30,7 @@ tasks:
   test-single:
     dotenv: [".test-env"]
     cmds:
-      - go test -v -parallel 1 -timeout 10s ./test/... -run '^TestClusterSupportTestSuite$$' # -testify.m '^TestSendReceiveMessagesFromAppMultiClients$'
-      # - go test -v -parallel 1 -timeout 60s ./test/... -run '^TestSendMessageTestSuite$$' -testify.m '^TestSendReceiveMessagesFromAppMultiClients$$'
+      - go test -v -parallel 1 -timeout 60s ./test/... -run '^TestSendMessageTestSuite$$'
   version_data:
     cmds:
       - echo "APPLICATION=WebSocket Gateway" > internal/config/version_data.txt

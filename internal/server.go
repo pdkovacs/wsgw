@@ -30,7 +30,6 @@ const (
 type Server struct {
 	server             http.Server
 	createConnectionId func(ctx context.Context) ConnectionID
-	clusterSupport     *ClusterSupport
 }
 
 func NewServer(
@@ -44,13 +43,7 @@ func NewServer(
 
 // SetupAndStart sets up and starts server.
 func (s *Server) SetupAndStart(serverCtx context.Context, configuration config.Config, ready func(ctx context.Context, port int, stop func(ctx context.Context) error)) error {
-	r, cluster := createWsgwRequestHandler(configuration, s.createConnectionId)
-	s.clusterSupport = cluster
-	if cluster != nil {
-		if err := cluster.Start(serverCtx); err != nil {
-			return fmt.Errorf("cluster start: %w", err)
-		}
-	}
+	r := createWsgwRequestHandler(configuration, s.createConnectionId)
 	return s.start(serverCtx, configuration, r, ready)
 }
 
@@ -116,13 +109,10 @@ func (s *Server) Stop(ctx context.Context) error {
 	} else {
 		logger.Info().Msg("Server shutdown successfully")
 	}
-	if s.clusterSupport != nil {
-		s.clusterSupport.Stop(ctx)
-	}
 	return shutdownErr
 }
 
-func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID) (*gin.Engine, *ClusterSupport) {
+func createWsgwRequestHandler(configuration config.Config, createConnectionId func(ctx context.Context) ConnectionID) *gin.Engine {
 	configureAppHTTPClient(configuration.Http2)
 
 	rootEngine := gin.Default()
@@ -141,8 +131,6 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 		baseUrl: configuration.AppBaseUrl,
 	}
 
-	clusterSupport := NewClusterSupport(configuration, appUrls, wsConns)
-
 	rootEngine.GET(
 		string(ConnectPath),
 		connectHandler(
@@ -151,19 +139,15 @@ func createWsgwRequestHandler(configuration config.Config, createConnectionId fu
 			configuration.LoadBalancerAddress,
 			createConnectionId,
 			configuration.AckNewConnWithConnId,
-			clusterSupport,
 		),
 	)
 
 	rootEngine.POST(
 		fmt.Sprintf("/message/:%s", connIdPathParamName),
-		pushHandler(
-			wsConns,
-			clusterSupport,
-		),
+		pushHandler(wsConns),
 	)
 
-	return rootEngine, clusterSupport
+	return rootEngine
 }
 
 type appURLs struct {

@@ -23,15 +23,6 @@ spec:
           env:
             - name: LOG_LEVEL
               value: debug
-            - name: WSGW_INSTANCE_IPADDRESS
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            # WSGW_INSTANCE_ADDR is what cluster peers use to reach this pod over HTTP.
-            # Composed from podIP + the listening port; supersedes WSGW_INSTANCE_IPADDRESS,
-            # which is kept above for back-compat.
-            - name: WSGW_INSTANCE_ADDR
-              value: "$(WSGW_INSTANCE_IPADDRESS):8080"
             - name: WSGW_SERVER_PORT
               value: "8080"
             - name: WSGW_HTTP2
@@ -39,8 +30,6 @@ spec:
                 configMapKeyRef:
                   name: wsgw-config
                   key: HTTP2
-            - name: WSGW_INSTANCE_PROTOCOL
-              value: "http"
             - name: WSGW_APP_BASE_URL
               value: "http://wsgw-e2e-app:8080"
             - name: WSGW_OTLP_ENDPOINT
