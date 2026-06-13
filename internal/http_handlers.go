@@ -1,7 +1,6 @@
 package wsgw
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -10,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 	"wsgw/internal/config"
 	loadmanagement "wsgw/pkgs/loadmanegement"
@@ -105,25 +105,13 @@ var errAppConnAccepting = errors.New("appError")
 func handleClientConnecting(requestCtx context.Context, r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Logger()
 
-	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, appUrls.connecting(), nil)
-	if err != nil {
-		logger.Error().Err(err).Msgf("failed to create request object")
-		return nil, errAppConnInternal
-	}
-	request.Header = stripWSUpgradeHeaders(r.Header)
-
 	connId := createConnectionId(r.Context())
+	urlPath := appUrls.connecting()
 
-	request.Header.Add(ConnectionIDHeaderKey, string(connId))
-
-	monitoring.InjectIntoHeader(requestCtx, request.Header)
-
-	response, requestErr := httpClient.Do(request)
-	if requestErr != nil {
-		logger.Error().Err(requestErr).Msgf("failed to send request")
-		return nil, errAppConnInternal
+	response, result, err := sendRequestToApp(requestCtx, http.MethodGet, urlPath, nil, r, connId)
+	if err != nil {
+		return result, err
 	}
-	defer cleanupResponse(response)
 
 	if response.StatusCode == http.StatusUnauthorized {
 		logger.Info().Msg("Authentication failed")
@@ -138,6 +126,34 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 	logger.Debug().Msgf("app has accepted: %v", connId)
 
 	return &appConnection{connId, httpClient}, nil
+}
+
+func sendRequestToApp(requestCtx context.Context, method string, urlPath string, body *string, r *http.Request, connId ConnectionID) (*http.Response, *appConnection, error) {
+	logger := zerolog.Ctx(r.Context()).With().Logger()
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = strings.NewReader(*body)
+	}
+
+	request, err := http.NewRequestWithContext(requestCtx, method, urlPath, bodyReader)
+	if err != nil {
+		logger.Error().Err(err).Msgf("failed to create request object")
+		return nil, nil, errAppConnInternal
+	}
+	request.Header = stripWSUpgradeHeaders(r.Header)
+
+	request.Header.Add(ConnectionIDHeaderKey, string(connId))
+
+	monitoring.InjectIntoHeader(requestCtx, request.Header)
+
+	response, requestErr := httpClient.Do(request)
+	if requestErr != nil {
+		logger.Error().Err(requestErr).Msgf("failed to send request")
+		return nil, nil, errAppConnInternal
+	}
+	defer cleanupResponse(response)
+	return response, nil, nil
 }
 
 func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
@@ -171,25 +187,13 @@ func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, conn
 }
 
 // Calls the `POST /ws/message-received` endpoint on the backend with "msg" and ConnectionIDKey
-func handleClientMessage(appConn *appConnection, appUrls applicationURLs) func(c context.Context, msg string) error {
+func handleClientMessage(g *gin.Context, appConn *appConnection, messageUrl string) func(c context.Context, msg string) error {
 	return func(c context.Context, msg string) error {
 		logger := zerolog.Ctx(c).With().Str(ConnectionIDKey, string(appConn.id)).Str("func", "handleClientMessage").Logger()
 		logger.Debug().Str("msg", msg).Send()
 
-		request, err := http.NewRequestWithContext(c,
-			http.MethodPost,
-			appUrls.message(),
-			bytes.NewReader([]byte(msg)),
-		)
-		if err != nil {
-			logger.Error().Err(err).Msgf("failed to create request object")
-			return err
-		}
-		request.Header.Add(ConnectionIDHeaderKey, string(appConn.id))
-
-		response, requestErr := appConn.httpClient.Do(request)
+		response, _, requestErr := sendRequestToApp(c, http.MethodPost, messageUrl, &msg, g.Request, appConn.id)
 		if requestErr != nil {
-			logger.Error().Err(requestErr).Msgf("failed to send request")
 			return requestErr
 		}
 		defer cleanupResponse(response)
@@ -290,7 +294,7 @@ func connectHandler(
 
 		logger.Debug().Msg("websocket message processing about to start...")
 
-		wsClosedError = ws.processMessages(requestContext, appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(appConn, appUrls)) // we block here until Error or Done
+		wsClosedError = ws.processMessages(requestContext, appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(g, appConn, appUrls.message())) // we block here until Error or Done
 
 		logger.Debug().Msgf("websocket message processing finished with %v", wsClosedError)
 	}

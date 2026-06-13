@@ -122,39 +122,43 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 	rootEngine := gin.Default()
 	rootEngine.Use(wsgw.RequestLogger("mockApplication"))
 
-	ws := rootEngine.Group("/ws")
-
-	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
+	authorizedGroup := rootEngine.Group("/")
+	authorizedGroup.Use(func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
-		req := g.Request
-		res := g
-		cred, hasCredHeader := req.Header["Authorization"]
+
+		cred, hasCredHeader := g.Request.Header["Authorization"]
 		logger.Debug().Msgf("Request has authorization header: %v and it is: %s", hasCredHeader, cred)
 		if !hasCredHeader {
-			_ = res.AbortWithError(http.StatusInternalServerError, errors.New("authorization header not found"))
+			_ = g.AbortWithError(http.StatusInternalServerError, errors.New("authorization header not found"))
 			return
 		}
 		if cred[0] == BadCredential {
-			_ = res.AbortWithError(401, errors.New("bad credentials in Authorization header"))
+			_ = g.AbortWithError(401, errors.New("bad credentials in Authorization header"))
 			return
 		}
+	})
+
+	ws := authorizedGroup.Group("/ws")
+
+	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
+		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 
 		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Request.Header.Get(connHeaderKey); connId != "" {
 			m.connMocksMux.Lock()
 			mockConn, ok := m.connMocks[connId]
 			if !ok {
 				logger.Info().Str(wsgw.ConnectionIDKey, connId).Msg("No mock for connection yet, creating...")
 				m.connMocks[connId] = newClientPeer()
 				m.connMocksMux.Unlock()
-				res.Status(http.StatusOK)
+				g.Status(http.StatusOK)
 				return
 			}
 			m.connMocksMux.Unlock()
 			mockConn.connect()
 		}
 
-		res.Status(http.StatusOK)
+		g.Status(http.StatusOK)
 	})
 
 	ws.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
