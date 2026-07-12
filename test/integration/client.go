@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,34 +33,6 @@ func NewClient(proxyUrl string, msgFromAppChan chan string) *Client {
 	}
 }
 
-func (c *Client) readAck(ctx context.Context) (map[string]string, error) {
-	ackMessageType, ackMessageBytes, errReadAckMessage := c.wsConn.Read(ctx)
-	if errReadAckMessage != nil {
-		return nil, errReadAckMessage
-	}
-
-	if websocket.MessageText != ackMessageType {
-		return nil, fmt.Errorf("the type of ack-message is invalid: %v", ackMessageType)
-	}
-
-	var ackMessage map[string]string = map[string]string{}
-	unmarshalErr := json.Unmarshal(ackMessageBytes, &ackMessage)
-	if unmarshalErr != nil {
-		return nil, unmarshalErr
-	}
-
-	return ackMessage, nil
-}
-
-func (c *Client) readConnId(ctx context.Context) (wsgw.ConnectionID, error) {
-	ackMessage, readAckErr := c.readAck(ctx)
-	if readAckErr != nil {
-		return "", readAckErr
-	}
-
-	return wsgw.ConnectionID(ackMessage[wsgw.ConnectionIDKey]), nil
-}
-
 func (c *Client) connect(ctx context.Context, connectOptions ...*websocket.DialOptions) (*http.Response, error) {
 	conn, httpResponse, err := connectTowsgw(ctx, c.proxyUrl, connectOptions...)
 	if err != nil {
@@ -69,11 +40,7 @@ func (c *Client) connect(ctx context.Context, connectOptions ...*websocket.DialO
 	}
 	c.wsConn = conn
 
-	connId, readConnIdErr := c.readConnId(ctx)
-	if readConnIdErr != nil {
-		return httpResponse, readConnIdErr
-	}
-	c.connectionId = connId
+	c.connectionId = wsgw.ConnectionID(httpResponse.Header.Get(wsgw.ConnectionIDHeaderKey))
 
 	go func() {
 		readFromAppLogger := zerolog.Ctx(ctx).With().Logger()

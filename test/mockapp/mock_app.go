@@ -140,11 +140,12 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 
 	ws := authorizedGroup.Group("/ws")
 
-	ws.GET(string(wsgw.ConnectPath), func(g *gin.Context) {
+	connIdParam := wsgw.ConnIdPathParamName
+
+	ws.GET(fmt.Sprintf("%s/:%s", wsgw.ConnectPath, connIdParam), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := g.Request.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(connIdParam); connId != "" {
 			m.connMocksMux.Lock()
 			mockConn, ok := m.connMocks[connId]
 			if !ok {
@@ -161,13 +162,11 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 		g.Status(http.StatusOK)
 	})
 
-	ws.POST(string(wsgw.DisonnectedPath), func(g *gin.Context) {
+	ws.POST(fmt.Sprintf("%s/:%s", wsgw.DisonnectedPath, connIdParam), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
-		req := g.Request
 		res := g
 
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(connIdParam); connId != "" {
 			m.connMocksMux.Lock()
 			mockConn, ok := m.connMocks[connId]
 			m.connMocksMux.Unlock()
@@ -180,13 +179,12 @@ func (m *mockApplication) createMockAppRequestHandler() (http.Handler, error) {
 		}
 	})
 
-	ws.POST(string(wsgw.MessagePath), func(g *gin.Context) {
+	ws.POST(fmt.Sprintf("%s/:%s", wsgw.MessagePath, connIdParam), func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
 		res := g
 
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(connIdParam); connId != "" {
 			bodyAsBytes, readBodyErr := io.ReadAll(req.Body)
 			req.Body.Close()
 			if readBodyErr != nil {

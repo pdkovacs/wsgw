@@ -154,16 +154,16 @@ type appURLs struct {
 	baseUrl string
 }
 
-func (u *appURLs) connecting() string {
-	return fmt.Sprintf("%s/ws%s", u.baseUrl, ConnectPath)
+func (u *appURLs) connecting(connId ConnectionID) string {
+	return fmt.Sprintf("%s/ws%s/%s", u.baseUrl, ConnectPath, connId)
 }
 
-func (u *appURLs) disconnected() string {
-	return fmt.Sprintf("%s/ws%s", u.baseUrl, DisonnectedPath)
+func (u *appURLs) disconnected(connId ConnectionID) string {
+	return fmt.Sprintf("%s/ws%s/%s", u.baseUrl, DisonnectedPath, connId)
 }
 
-func (u *appURLs) message() string {
-	return fmt.Sprintf("%s/ws%s", u.baseUrl, MessagePath)
+func (u *appURLs) message(connId ConnectionID) string {
+	return fmt.Sprintf("%s/ws%s/%s", u.baseUrl, MessagePath, connId)
 }
 
 func RequestLogger(unitName string) func(g *gin.Context) {

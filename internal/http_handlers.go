@@ -3,7 +3,6 @@ package wsgw
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +24,8 @@ import (
 // TODO: make this configurable?
 const (
 	ConnectionIDHeaderKey = "X-WSGW-CONNECTION-ID"
-	connIdPathParamName   = ConnectionIDKey
+	ConnIdPathParamName   = ConnectionIDKey
+	connIdPathParamName   = ConnIdPathParamName
 )
 
 type wsIOAdapter struct {
@@ -56,9 +56,9 @@ func (wsIo *wsIOAdapter) Read(ctx context.Context) (string, error) {
 }
 
 type applicationURLs interface {
-	connecting() string
-	disconnected() string
-	message() string
+	connecting(connId ConnectionID) string
+	disconnected(connId ConnectionID) string
+	message(connId ConnectionID) string
 }
 
 var httpClient http.Client = http.Client{
@@ -101,14 +101,14 @@ var errAppConnInternal = errors.New("internalError")
 var errAppConnAuthn = errors.New("authnError")
 var errAppConnAccepting = errors.New("appError")
 
-// Relays the connection request to the backend's `POST /ws/connect` endpoint and
+// Relays the connection request to the backend's `GET /ws/connect/{connectionId}` endpoint.
 func handleClientConnecting(requestCtx context.Context, r *http.Request, createConnectionId func(ctx context.Context) ConnectionID, appUrls applicationURLs) (*appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Logger()
 
 	connId := createConnectionId(r.Context())
-	urlPath := appUrls.connecting()
+	urlPath := appUrls.connecting(connId)
 
-	response, result, err := sendRequestToApp(requestCtx, http.MethodGet, urlPath, nil, r, connId)
+	response, result, err := sendRequestToApp(requestCtx, http.MethodGet, urlPath, nil, r)
 	if err != nil {
 		return result, err
 	}
@@ -128,7 +128,7 @@ func handleClientConnecting(requestCtx context.Context, r *http.Request, createC
 	return &appConnection{connId, httpClient}, nil
 }
 
-func sendRequestToApp(requestCtx context.Context, method string, urlPath string, body *string, r *http.Request, connId ConnectionID) (*http.Response, *appConnection, error) {
+func sendRequestToApp(requestCtx context.Context, method string, urlPath string, body *string, r *http.Request) (*http.Response, *appConnection, error) {
 	logger := zerolog.Ctx(r.Context()).With().Logger()
 
 	var bodyReader io.Reader
@@ -143,8 +143,6 @@ func sendRequestToApp(requestCtx context.Context, method string, urlPath string,
 	}
 	request.Header = stripWSUpgradeHeaders(r.Header)
 
-	request.Header.Add(ConnectionIDHeaderKey, string(connId))
-
 	monitoring.InjectIntoHeader(requestCtx, request.Header)
 
 	response, requestErr := httpClient.Do(request)
@@ -157,17 +155,17 @@ func sendRequestToApp(requestCtx context.Context, method string, urlPath string,
 }
 
 func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, connReqHeader http.Header, appConn *appConnection, logger zerolog.Logger) {
-	logger = logger.With().Str("appUrl", appUrls.disconnected()).Str(ConnectionIDKey, string(appConn.id)).Logger()
+	urlPath := appUrls.disconnected(appConn.id)
+	logger = logger.With().Str("appUrl", urlPath).Str(ConnectionIDKey, string(appConn.id)).Logger()
 
 	logger.Debug().Msg("BEGIN")
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, appUrls.disconnected(), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, urlPath, nil)
 	if err != nil {
 		logger.Error().Err(err).Msgf("failed to create request object")
 		return
 	}
 	request.Header = connReqHeader
-	request.Header.Add(ConnectionIDHeaderKey, string(appConn.id))
 
 	monitoring.InjectIntoHeader(ctx, request.Header)
 
@@ -186,13 +184,13 @@ func handleClientDisconnected(ctx context.Context, appUrls applicationURLs, conn
 	logger.Debug().Msg("END")
 }
 
-// Calls the `POST /ws/message-received` endpoint on the backend with "msg" and ConnectionIDKey
+// Calls the `POST /ws/message/{connectionId}` endpoint on the backend with "msg" as the body.
 func handleClientMessage(g *gin.Context, appConn *appConnection, messageUrl string) func(c context.Context, msg string) error {
 	return func(c context.Context, msg string) error {
 		logger := zerolog.Ctx(c).With().Str(ConnectionIDKey, string(appConn.id)).Str("func", "handleClientMessage").Logger()
 		logger.Debug().Str("msg", msg).Send()
 
-		response, _, requestErr := sendRequestToApp(c, http.MethodPost, messageUrl, &msg, g.Request, appConn.id)
+		response, _, requestErr := sendRequestToApp(c, http.MethodPost, messageUrl, &msg, g.Request)
 		if requestErr != nil {
 			return requestErr
 		}
@@ -205,18 +203,6 @@ func handleClientMessage(g *gin.Context, appConn *appConnection, messageUrl stri
 
 		return nil
 	}
-}
-
-func sendMessageToClient(ctx context.Context, wsconn *websocket.Conn, obj any) error {
-	jsonBytes, marshalErr := json.Marshal(obj)
-	if marshalErr != nil {
-		return marshalErr
-	}
-	writeErr := wsconn.Write(ctx, websocket.MessageText, jsonBytes)
-	if writeErr != nil {
-		return writeErr
-	}
-	return nil
 }
 
 // connectHandler calls `authenticateClient` if it is not `nil` to authenticate the client,
@@ -251,6 +237,10 @@ func connectHandler(
 
 		// logger = logger.().Str(logging.UnitLogger, "connectHandler").Str(ConnectionIDKey, string(appConn.id)).Logger()
 
+		if ackWithNewConnId {
+			g.Writer.Header().Set(ConnectionIDHeaderKey, string(appConn.id))
+		}
+
 		wsConn, subsErr := websocket.Accept(g.Writer, g.Request, &websocket.AcceptOptions{
 			OriginPatterns: []string{loadBalancerAddress},
 		})
@@ -283,18 +273,9 @@ func connectHandler(
 			}
 		}()
 
-		if ackWithNewConnId {
-			ackErr := sendMessageToClient(requestContext, wsConn, map[string]string{ConnectionIDKey: string(appConn.id)})
-			if ackErr != nil {
-				logger.Error().Err(fmt.Errorf("failed to send connect ack: %v", ackErr))
-				wsClosedError = ackErr
-				return
-			}
-		}
-
 		logger.Debug().Msg("websocket message processing about to start...")
 
-		wsClosedError = ws.processMessages(requestContext, appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(g, appConn, appUrls.message())) // we block here until Error or Done
+		wsClosedError = ws.processMessages(requestContext, appConn.id, &wsIOAdapter{wsConn}, handleClientMessage(g, appConn, appUrls.message(appConn.id))) // we block here until Error or Done
 
 		logger.Debug().Msgf("websocket message processing finished with %v", wsClosedError)
 	}

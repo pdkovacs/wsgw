@@ -7,27 +7,27 @@ It's a small, focused service for low- to medium-workload deployments that want 
 ## How it works
 
 ```
-Client                  wsgw                       Backend
-  |                      |                            |
-  |--- GET /connect ---->|--- GET /ws/connect ------->|
-  |                      |<--------- 200 OK ----------|
-  |<-- 101 + ack {id} ---|                            |
-  |                      |                            |
-  |---- WS frame ------->|--- POST /ws/message ------>|
-  |                      |<--------- 200 OK ----------|
-  |                      |                            |
-  |                      |<-- POST /message/{id} -----|
-  |<--- WS frame --------|----------- 204 ----------->|
-  |                      |                            |
-  |--- WS close -------->|--- POST /ws/disconnected ->|
+Client                  wsgw                              Backend
+  |                      |                                   |
+  |--- GET /connect ---->|--- GET /ws/connect/{id} -------->|
+  |                      |<------------ 200 OK --------------|
+  |<-- 101 + header id --|                                   |
+  |                      |                                   |
+  |---- WS frame ------->|--- POST /ws/message/{id} ------->|
+  |                      |<------------ 200 OK --------------|
+  |                      |                                   |
+  |                      |<-- POST /message/{id} ------------|
+  |<--- WS frame --------|------------- 204 ----------------->|
+  |                      |                                   |
+  |--- WS close -------->|--- POST /ws/disconnected/{id} -->|
 ```
 
 1. Client opens a WebSocket: `GET /connect`.
-2. wsgw forwards the request as a regular HTTP `GET` to the backend's `/ws/connect` for authentication.
-3. Backend returns `200` → wsgw upgrades the HTTP connection to a WebSocket and (optionally) sends an ack frame containing the assigned connection ID.
-4. **Client → backend:** wsgw forwards each WS frame to the backend as `POST /ws/message`.
-5. **Backend → client:** backend `POST`s to wsgw's `/message/{connectionId}`; wsgw forwards the body over the WebSocket.
-6. Either side closes the WS → wsgw notifies the backend via `POST /ws/disconnected` (best-effort).
+2. wsgw generates a connection ID and forwards the request as a regular HTTP `GET` to the backend's `/ws/connect/{id}` for authentication.
+3. Backend returns `200` → wsgw upgrades the HTTP connection to a WebSocket and (optionally) returns the assigned connection ID in a response header.
+4. **Client → backend:** wsgw forwards each WS frame to the backend as `POST /ws/message/{id}`.
+5. **Backend → client:** backend `POST`s to wsgw's `/message/{id}`; wsgw forwards the body over the WebSocket.
+6. Either side closes the WS → wsgw notifies the backend via `POST /ws/disconnected/{id}` (best-effort).
 
 ## Quick start
 
@@ -54,7 +54,7 @@ A working backend implementation suitable for poking at locally lives in [`test/
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET`  | `/connect` | Client opens a WebSocket. Returns `101` on success, `401` if the backend rejects auth, `500` otherwise. The first WS text frame is the connect-ack (see below) when `WSGW_ACK_NEW_CONN_WITH_CONN_ID=true`. |
+| `GET`  | `/connect` | Client opens a WebSocket. Returns `101` on success, `401` if the backend rejects auth, `500` otherwise. The `X-WSGW-CONNECTION-ID` response header carries the connect-ack (see below) when `WSGW_ACK_NEW_CONN_WITH_CONN_ID=true`. |
 | `POST` | `/message/{connectionId}` | Backend sends a message to a specific client. Body is opaque (delivered to the WebSocket as-is). Returns `204` on success, `404` if the connection is unknown, `503` if the per-connection buffer is saturated, `400`/`500` on input/internal errors. |
 | `GET`  | `/app-info` | Build/version info. |
 
@@ -64,15 +64,15 @@ The backend must serve three endpoints under whatever base URL is configured via
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET`  | `/ws/connect` | Authenticate a new connection. Return `200` to accept, `401` to reject, anything else is treated as an internal error. The original client headers (including `Authorization`) are passed through. wsgw also adds `X-WSGW-CONNECTION-ID`. |
-| `POST` | `/ws/message` | Receive a frame the client sent. Return `200` to acknowledge; a non-`200` response causes wsgw to forward the response body back to the client over the WebSocket. The connection ID is in the `X-WSGW-CONNECTION-ID` header. |
-| `POST` | `/ws/disconnected` | Notification that a client disconnected. Best-effort: wsgw does not retry, and the response status is logged but not acted on. |
+| `GET`  | `/ws/connect/{connectionId}` | Authenticate a new connection. Return `200` to accept, `401` to reject, anything else is treated as an internal error. The original client headers (including `Authorization`) are passed through. |
+| `POST` | `/ws/message/{connectionId}` | Receive a frame the client sent. Return `200` to acknowledge; a non-`200` response causes wsgw to forward the response body back to the client over the WebSocket. |
+| `POST` | `/ws/disconnected/{connectionId}` | Notification that a client disconnected. Best-effort: wsgw does not retry, and the response status is logged but not acted on. |
 
 ### Headers and protocol notes
 
-- **`X-WSGW-CONNECTION-ID`** — set by wsgw on every request to the backend. Carries the gateway-assigned connection ID.
-- **`Authorization`** — passed through from the client's `GET /connect` to the backend's `GET /ws/connect` unchanged. wsgw does no auth itself.
-- **Connect-ack frame** — when `WSGW_ACK_NEW_CONN_WITH_CONN_ID=true`, the first WS text frame the client receives after upgrade is `{"connectionId":"<id>"}`. Clients that need the ID for later out-of-band correlation should read this frame before processing application traffic.
+- **Connection ID** — a path parameter on every wsgw↔backend leg (`/ws/connect/{id}`, `/ws/message/{id}`, `/ws/disconnected/{id}`), just as on the backend→wsgw leg (`/message/{id}`). It is never carried in a header on these legs.
+- **`Authorization`** — passed through from the client's `GET /connect` to the backend's `GET /ws/connect/{id}` unchanged. wsgw does no auth itself.
+- **`X-WSGW-CONNECTION-ID`** — set by wsgw only on the `GET /connect` response to the client (the 101 handshake), when `WSGW_ACK_NEW_CONN_WITH_CONN_ID=true`. Carries the gateway-assigned connection ID for clients that need it for out-of-band correlation. Note that browsers cannot read headers on the 101 handshake response; this is intended for native/non-browser clients.
 - **Per-connection rate limiting** — incoming client frames are rate-limited at 1 msg / 100 ms with a burst of 8, with a 1024-message buffer. Sustained overload causes the backend's `POST /message/{id}` to receive `503`.
 
 ## Configuration
@@ -85,7 +85,7 @@ All configuration is via environment variables, prefixed `WSGW_`.
 | `WSGW_SERVER_PORT` | — | Listening port. **Required.** |
 | `WSGW_APP_BASE_URL` | — | Base URL of the backend (e.g. `http://app:8080`). **Required.** |
 | `WSGW_HTTP2` | `false` | Enable H2C between wsgw and the backend. |
-| `WSGW_ACK_NEW_CONN_WITH_CONN_ID` | `false` | Send the connect-ack frame after upgrade. |
+| `WSGW_ACK_NEW_CONN_WITH_CONN_ID` | `false` | Return the connection ID as the `X-WSGW-CONNECTION-ID` header on the `GET /connect` response. |
 | `WSGW_LOAD_BALANCER_ADDRESS` | `""` | Allowed `Origin` for the WS handshake. *Slated for removal.* |
 | `WSGW_OTLP_ENDPOINT` | `""` | OTLP/HTTP exporter endpoint for traces & metrics. Empty disables OTel export. |
 | `WSGW_OTLP_SERVICE_NAMESPACE` | `""` | OTel `service.namespace` resource attribute. |

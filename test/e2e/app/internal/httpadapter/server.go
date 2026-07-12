@@ -132,9 +132,9 @@ func (s *server) initEndpoints(ctx context.Context, conf config.Config) *gin.Eng
 
 		wsGroup := authorizedGroup.Group("/ws")
 		wsHandler := newWSHandler(wsConnections)
-		wsGroup.GET(string(wsgw.ConnectPath), wsHandler.connectWsHandler(wsConnections))
-		wsGroup.POST(string(wsgw.DisonnectedPath), wsHandler.disconnectWsHandler(wsConnections))
-		wsGroup.POST(string(wsgw.MessagePath), messageWsHandler())
+		wsGroup.GET(fmt.Sprintf("%s/:%s", wsgw.ConnectPath, wsgw.ConnIdPathParamName), wsHandler.connectWsHandler(wsConnections))
+		wsGroup.POST(fmt.Sprintf("%s/:%s", wsgw.DisonnectedPath, wsgw.ConnIdPathParamName), wsHandler.disconnectWsHandler(wsConnections))
+		wsGroup.POST(fmt.Sprintf("%s/:%s", wsgw.MessagePath, wsgw.ConnIdPathParamName), messageWsHandler())
 
 		authorizedGroup.POST("/longrequest", func(g *gin.Context) {
 			reqCtx := g.Request.Context()

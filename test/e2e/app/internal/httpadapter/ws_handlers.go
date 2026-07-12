@@ -37,7 +37,6 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 		ws.metrics.connectRequestCounter.Add(requestCtx, 1)
 
 		logger := zerolog.Ctx(requestCtx).With().Logger()
-		req := g.Request
 		res := g
 
 		userSessionData, ok := getSessionDataFromSession(g, &logger)
@@ -47,8 +46,7 @@ func (ws *WSHandler) connectWsHandler(wsConnections conntrack.WsConnections) fun
 			return
 		}
 
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(wsgw.ConnIdPathParamName); connId != "" {
 			logger.Debug().Str("connid", connId).Msg("incoming connection request...")
 
 			addErr := wsConnections.AddConnection(requestCtx, userSessionData.UserInfo.UserId, connId)
@@ -77,7 +75,6 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 		ws.metrics.disconnectRequestCounter.Add(g.Request.Context(), 1)
 
 		logger0 := zerolog.Ctx(g.Request.Context()).With().Logger()
-		req := g.Request
 
 		userSessionData, ok := getSessionDataFromSession(g, &logger0)
 		if !ok {
@@ -87,8 +84,7 @@ func (ws *WSHandler) disconnectWsHandler(wsConnections conntrack.WsConnections) 
 
 		logger0 = logger0.With().Str("userId", userId).Logger()
 
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(wsgw.ConnIdPathParamName); connId != "" {
 			logger := logger0.With().Str("connid", connId).Logger()
 			logger.Debug().Msg("incoming disconnection request...")
 
@@ -113,8 +109,7 @@ func messageWsHandler() func(g *gin.Context) {
 	return func(g *gin.Context) {
 		logger := zerolog.Ctx(g.Request.Context()).With().Logger()
 		req := g.Request
-		connHeaderKey := wsgw.ConnectionIDHeaderKey
-		if connId := req.Header.Get(connHeaderKey); connId != "" {
+		if connId := g.Param(wsgw.ConnIdPathParamName); connId != "" {
 			bodyAsBytes, readBodyErr := io.ReadAll(req.Body)
 			req.Body.Close()
 			if readBodyErr != nil {
